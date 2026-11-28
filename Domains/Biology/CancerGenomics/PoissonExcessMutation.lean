@@ -84,7 +84,7 @@ rate at the threshold `p*` is
 * `upperTail_le_pValue`: the test is conservative: the `p` value at any rate `μ ≤ μ̂`, such as
   the neutral rate of a cluster that also holds elements under selection, is at most `p`.
 * `expectedCDF_le`: `F_exp(p*) ≤ p*` on `[0, 1]`: the null `p` values are super-uniform, so the
-  uniform distribution function would overstate `F_exp`.
+  uniform distribution function only bounds `F_exp` from above.
 * `observedCDF_mono`, `expectedCDF_mono`, `falseDiscoveryRate_nonneg`.
 
 ## References
@@ -329,7 +329,8 @@ theorem expectedCDF_mono (cluster : ι → κ) (L n : ι → ℕ) :
 /-- **The null `p` values are super-uniform:** `F_exp(t) ≤ t` for `t ∈ [0, 1]`. A count with a
 Poisson law has an upper-tail `p` value with `P(p ≤ t) ≤ t`
 (`MathlibExt.Probability.Statistics.ExactTests.isValidPValue_upperTailPValue`), with equality
-only at the attainable values of `p`, since the law has atoms. -/
+exactly at `t = 0` and at the attainable values of `p`; between them the inequality is strict, as
+the law has atoms. -/
 theorem expectedCDF_le (cluster : ι → κ) (L n : ι → ℕ) {t : ℝ} (ht0 : 0 ≤ t) (ht1 : t ≤ 1) :
     expectedCDF cluster L n t ≤ t := by
   have hterm : ∀ r : ℝ≥0,
