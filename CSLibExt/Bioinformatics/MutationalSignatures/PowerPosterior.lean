@@ -33,7 +33,9 @@ does not depend. Densities, the likelihood and the normalizing constant take val
 
 ## Main definitions
 
-* `Params J K I`: loadings `L ≥ 0` and signatures `R ≥ 0` whose rows sum to `1`.
+* `Params J K I`: loadings `L ≥ 0` and signatures `R ≥ 0` whose rows sum to `1`, a standard Borel
+  space for countable `J` and `K`, so that Bayes' rule applies with `Θ = Params J K I`, or with
+  `Θ = Params J K I × H` for a standard Borel space `H` of further parameters.
 * `Params.rate`: the Poisson means `(L R)_ji`, the reconstruction `ARDNMF.recon L R`.
 * `model θ`: the law of the counts (Eq. 1), with independent Poisson entries; `modelKernel` is
   the corresponding Markov kernel.
@@ -47,7 +49,8 @@ does not depend. Densities, the likelihood and the normalizing constant take val
 * `lintegral_powerPosterior`, `isProbabilityMeasure_withDensity_powerPosterior`: when
   `0 < Z_ξ(X) < ∞`, the power posterior is a probability density. `normConst_le` bounds
   `Z_ξ(X)` by the total mass of the prior, so a proper prior gives `Z_ξ(X) < ∞`.
-* `powerPosterior_zero`: for `ξ = 0` the power posterior is the prior density.
+* `powerPosterior_zero`: for `ξ = 0` and a prior with `∫ π₀ dν = 1`, the power posterior is the
+  prior density.
 * `powerPosterior_one`: for `ξ = 1` it is the standard posterior `p(X | θ) π₀(θ) / Z(X)`
   (Eq. 6); `withDensity_powerPosterior_one` identifies it with the Bayes posterior of the model
   (`Cslib.MachineLearning.Bayesian.bayesPosterior`), and
@@ -69,7 +72,7 @@ Out of scope: the paper's prior (Eqs. 3–5), its MCMC sampler and its simulatio
 
 namespace Cslib.Bioinformatics.MutationalSignatures.PoissonNMF
 
-open MeasureTheory ProbabilityTheory
+open MeasureTheory ProbabilityTheory Topology
 open scoped ENNReal NNReal
 
 /-- **Parameters of the Poisson NMF model.** For finite index types $J$ (samples), $K$ (latent
@@ -106,6 +109,55 @@ theorem measurable_L : Measurable (Params.L : Params J K I → J → K → ℝ) 
 @[fun_prop]
 theorem measurable_R : Measurable (Params.R : Params J K I → K → I → ℝ) :=
   measurable_snd.comp (comap_measurable _)
+
+theorem injective_prod : Function.Injective fun θ : Params J K I ↦ (θ.L, θ.R) := by
+  intro a b h
+  cases a
+  cases b
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj h
+  rfl
+
+theorem range_prod : Set.range (fun θ : Params J K I ↦ (θ.L, θ.R)) =
+    {p | (∀ j k, 0 ≤ p.1 j k) ∧ (∀ k i, 0 ≤ p.2 k i) ∧ ∀ k, ∑ i, p.2 k i = 1} := by
+  ext ⟨L, R⟩
+  constructor
+  · rintro ⟨θ, h⟩
+    obtain ⟨rfl, rfl⟩ := Prod.mk.inj h
+    exact ⟨θ.L_nonneg, θ.R_nonneg, θ.sum_R⟩
+  · rintro ⟨hL, hR, hR1⟩
+    exact ⟨⟨L, R, hL, hR, hR1⟩, rfl⟩
+
+/-- With countably many samples and processes, parameters form a standard Borel space: the map
+`θ ↦ (θ.L, θ.R)` is a closed embedding into a Polish space for the topology it induces, whose
+Borel σ-algebra is the σ-algebra of the parameters. -/
+instance [Countable J] [Countable K] : StandardBorelSpace (Params J K I) := by
+  let : TopologicalSpace (Params J K I) :=
+    TopologicalSpace.induced (fun θ ↦ (θ.L, θ.R)) inferInstance
+  have he : IsClosedEmbedding fun θ : Params J K I ↦ (θ.L, θ.R) := by
+    refine ⟨⟨⟨rfl⟩, injective_prod⟩, ?_⟩
+    rw [range_prod]
+    simp only [Set.ofPred_and, Set.ofPred_forall]
+    refine IsClosed.inter ?_ (IsClosed.inter ?_ ?_)
+    · exact isClosed_iInter fun j ↦ isClosed_iInter fun k ↦
+        isClosed_le continuous_const (by fun_prop)
+    · exact isClosed_iInter fun k ↦ isClosed_iInter fun i ↦
+        isClosed_le continuous_const (by fun_prop)
+    · exact isClosed_iInter fun k ↦ isClosed_eq (by fun_prop) continuous_const
+  have : PolishSpace (Params J K I) := he.polishSpace
+  have : BorelSpace (Params J K I) :=
+    ⟨by rw [borel_comap, ← BorelSpace.measurable_eq]; rfl⟩
+  exact ⟨⟨_, this, inferInstance⟩⟩
+
+/-- With at least one mutation type there are parameters: zero loadings and uniform
+signatures. -/
+instance [Nonempty I] : Nonempty (Params J K I) :=
+  ⟨{ L := fun _ _ ↦ 0
+     R := fun _ _ ↦ 1 / Fintype.card I
+     L_nonneg := fun _ _ ↦ le_rfl
+     R_nonneg := fun _ _ ↦ by positivity
+     sum_R := fun _ ↦ by
+       rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul,
+         mul_one_div_cancel (Nat.cast_ne_zero.2 Fintype.card_ne_zero)] }⟩
 
 variable [Fintype K]
 

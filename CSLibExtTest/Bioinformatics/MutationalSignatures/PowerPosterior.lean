@@ -121,6 +121,38 @@ example :
   posterior_eq_withDensity_powerPosterior_one measurable_const measurable_one
     (normConst_onePoint_ne_zero 1)
 
+/-! ### Bayes' rule on the model's own parameters
+
+The parameters form a nonempty standard Borel space, so Bayes' rule applies with `Θ` the
+parameters themselves together with hyperparameters `μ : K → ℝ`, as in the source. -/
+
+example : StandardBorelSpace (Params Unit Unit Unit) := inferInstance
+
+example : Nonempty (Params (Fin 3) (Fin 2) (Fin 4)) := inferInstance
+
+example {J K I : Type} [Fintype J] [Fintype K] [Fintype I] [Nonempty I]
+    (ν : Measure (Params J K I × (K → ℝ))) {π₀ : Params J K I × (K → ℝ) → ℝ≥0∞}
+    (hπ₀ : Measurable π₀) [IsFiniteMeasure (ν.withDensity π₀)] (X : J → I → ℕ)
+    (h0 : normConst ν π₀ Prod.fst X 1 ≠ 0) :
+    ((modelKernel.comap Prod.fst measurable_fst)†(ν.withDensity π₀)) X =
+      ν.withDensity (powerPosterior ν π₀ Prod.fst X 1) :=
+  posterior_eq_withDensity_powerPosterior_one measurable_fst hπ₀ h0
+
+/-- The point mass at `θ₁` with hyperparameter `μ = 0`. -/
+noncomputable def ν₁ : Measure (Params Unit Unit Unit × (Unit → ℝ)) :=
+  Measure.dirac (θ₁, fun _ ↦ 0)
+
+instance : IsFiniteMeasure (ν₁.withDensity 1) := by
+  rw [withDensity_one, ν₁]
+  infer_instance
+
+/-- The hypotheses of Bayes' rule hold for the point mass `ν₁`. -/
+example :
+    ((modelKernel.comap Prod.fst measurable_fst)†(ν₁.withDensity 1)) X₀ =
+      ν₁.withDensity (powerPosterior ν₁ 1 Prod.fst X₀ 1) := by
+  refine posterior_eq_withDensity_powerPosterior_one measurable_fst measurable_one ?_
+  simp [normConst, ν₁, likelihood_eq, θ₁, X₀, ARDNMF.recon, Real.exp_pos]
+
 /-! ### A two-point parameter space
 
 The parameters `true ↦ θ₁` (mean `1`) and `false ↦ θ₀` (mean `0`), with prior mass `1/2` each,
