@@ -14,6 +14,7 @@ public import Mathlib.Analysis.Calculus.Deriv.Pi
 public import Mathlib.Analysis.Convex.Function
 public import Mathlib.Analysis.SpecialFunctions.Log.Deriv
 public import Mathlib.MeasureTheory.Measure.GiryMonad
+public import Mathlib.MeasureTheory.Measure.Tilted
 
 /-!
 # The Poisson log-concave compound model for read counts
@@ -44,9 +45,9 @@ over the sequences `(φ_q)` whose increments `φ_{q+1} - φ_q` are nonincreasing
 ## Main results
 
 * `marginal_eq_poissonMixtureReal`: `P_φ` is the mixed Poisson mass function whose mixing law is
-  the law of the rate `e^η`, `η ~ e^{φ} / ∫ e^{φ}`.
+  the law of the rate `e^η`, `η ~ e^{φ} / ∫ e^{φ}` (the tilted measure `volume.tilted φ`).
 * `bind_poissonMeasure_singleton`: `P_φ(x)` is the probability of the count `x` under the
-  compound law: `η ~ e^{φ} / ∫ e^{φ}`, then a Poisson count with rate `e^η`.
+  compound law: `η ~ volume.tilted φ`, then a Poisson count with rate `e^η`.
 * `hasSum_marginal`: if `e^{φ}` is integrable, the masses `P_φ(x)` sum to one.
 * `gridMarginal_eq_poissonMixtureReal`, `hasSum_gridMarginal`: `P^Q_φ` is the same mixed Poisson
   law with the latent law replaced by the law on the grid points with weights proportional to
@@ -61,11 +62,12 @@ over the sequences `(φ_q)` whose increments `φ_{q+1} - φ_q` are nonincreasing
 
 ## Implementation notes
 
-`P_φ` is defined by the ratio of integrals as in the source. When `e^{φ}` is not integrable both
-integrals are junk values and `P_φ = 0`; the results that read `P_φ` as a probability assume
-integrability. None of the results needs `φ` to be concave: concavity is what makes the class of
-latent laws identifiable and the estimation problem tractable, and it enters here only through the
-constraint on the grid (`antitone_grid_sub_of_concaveOn`). The source writes the normalization
+`P_φ` is defined by the ratio of integrals as in the source. When `e^{φ}` is not integrable the
+normalising integral `∫ e^{φ}` is the junk value `0`, so `P_φ = 0`; the results that read `P_φ` as
+a probability assume integrability. The latent law with density `e^{φ} / ∫ e^{φ}` is Mathlib's
+tilted measure `volume.tilted φ`. Only `antitone_grid_sub_of_concaveOn` uses the concavity of `φ`:
+the log-concave class keeps the nonparametric fit non-degenerate, as the source puts it, and makes
+the feasible set of the grid problem convex. The source writes the normalization
 `∫ e^{φ}` of `P_φ` as `∑ₖ ∫ Pois(k; e^η) e^{φ(η)} dη`, which equals it since the Poisson masses
 sum to one, and likewise for the quadrature version.
 
@@ -93,7 +95,8 @@ arises from a latent log-rate `η` with density proportional to `e^{φ(η)}` (lo
 concave) and, given `η`, a Poisson law with rate `e^η`. Its marginal probability is
 `P_φ(x) = (∫ e^{x η - e^η} / x! · e^{φ(η)} dη) / ∫ e^{φ(η)} dη`, the integrals over `ℝ` with
 Lebesgue measure. This is a probability mass function when `e^{φ}` is integrable
-(`hasSum_marginal`); otherwise the integrals are junk values and `P_φ(x) = 0`. -/
+(`hasSum_marginal`); otherwise the normalising integral `∫ e^{φ}` is the junk value `0`, so
+`P_φ(x) = 0`. -/
 noncomputable def marginal (φ : ℝ → ℝ) (x : ℕ) : ℝ :=
   (∫ η, exp (x * η - exp η) / x.factorial * exp (φ η)) / ∫ η, exp (φ η)
 
@@ -142,55 +145,31 @@ private lemma integrable_weight_mul {φ : ℝ → ℝ} (hφ : Integrable fun η 
 theorem marginal_nonneg (φ : ℝ → ℝ) (x : ℕ) : 0 ≤ marginal φ x :=
   div_nonneg (integral_nonneg fun _ => by positivity) (integral_nonneg fun _ => by positivity)
 
-/-- The latent log-rate law, with density `e^{φ} / ∫ e^{φ}`, is a probability measure when
-`e^{φ}` is integrable. -/
-theorem isProbabilityMeasure_latent {φ : ℝ → ℝ} (hφ : Integrable fun η => exp (φ η)) :
-    IsProbabilityMeasure
-      (volume.withDensity fun η => ENNReal.ofReal (exp (φ η) / ∫ s, exp (φ s))) := by
-  have hZ : 0 < ∫ s, exp (φ s) := integral_exp_pos hφ
-  constructor
-  rw [withDensity_apply _ MeasurableSet.univ, Measure.restrict_univ,
-    ← ofReal_integral_eq_lintegral_ofReal (hφ.div_const _)
-      (Filter.Eventually.of_forall fun _ => by positivity),
-    integral_div, div_self hZ.ne', ENNReal.ofReal_one]
-
 /-- **`P_φ` is a mixed Poisson law.** The marginal probability is the mixed Poisson mass function
 whose mixing law is the law of the rate `e^η` for a latent log-rate `η` with density
-`e^{φ} / ∫ e^{φ}`. -/
+`e^{φ} / ∫ e^{φ}`, the tilted measure `volume.tilted φ`. -/
 theorem marginal_eq_poissonMixtureReal (φ : ℝ → ℝ) (x : ℕ) :
-    marginal φ x = poissonMixtureReal
-      ((volume.withDensity fun η => ENNReal.ofReal (exp (φ η) / ∫ s, exp (φ s))).map exp) x := by
-  by_cases hφ : Integrable fun η => exp (φ η)
-  · have hρ : AEMeasurable (fun η => ENNReal.ofReal (exp (φ η) / ∫ s, exp (φ s))) volume :=
-      (hφ.aemeasurable.div_const _).ennreal_ofReal
-    rw [poissonMixtureReal, integral_map measurable_exp.aemeasurable (by fun_prop),
-      integral_withDensity_eq_integral_toReal_smul₀ hρ
-        (Filter.Eventually.of_forall fun _ => ENNReal.ofReal_lt_top), marginal,
-      ← integral_div]
-    refine integral_congr_ae (Filter.Eventually.of_forall fun η => ?_)
-    simp only [smul_eq_mul]
-    rw [ENNReal.toReal_ofReal (by positivity), exp_mul_sub_exp_div_factorial]
-    ring
-  · simp [marginal, poissonMixtureReal, integral_undef hφ]
+    marginal φ x = poissonMixtureReal ((volume.tilted φ).map exp) x := by
+  rw [poissonMixtureReal, integral_map measurable_exp.aemeasurable (by fun_prop), integral_tilted,
+    marginal, ← integral_div]
+  refine integral_congr_ae (Filter.Eventually.of_forall fun η => ?_)
+  simp only [smul_eq_mul, exp_mul_sub_exp_div_factorial]
+  ring
 
 /-- **The marginal probability of the compound model.** Draw a latent log-rate `η` with density
-`e^{φ} / ∫ e^{φ}`, then a count from the Poisson law with rate `e^η`: the count is `x` with
-probability `P_φ(x)`. -/
+`e^{φ} / ∫ e^{φ}` (the tilted measure `volume.tilted φ`), then a count from the Poisson law with
+rate `e^η`: the count is `x` with probability `P_φ(x)`. -/
 theorem bind_poissonMeasure_singleton (φ : ℝ → ℝ) (x : ℕ) :
-    (volume.withDensity fun η => ENNReal.ofReal (exp (φ η) / ∫ s, exp (φ s))).bind
-      (fun η => poissonMeasure (exp η).toNNReal) {x} = ENNReal.ofReal (marginal φ x) := by
+    (volume.tilted φ).bind (fun η => poissonMeasure (exp η).toNNReal) {x} =
+      ENNReal.ofReal (marginal φ x) := by
   have hκ : Measurable fun η : ℝ => poissonMeasure (exp η).toNNReal :=
     measurable_poissonMeasure.comp measurable_exp.real_toNNReal
-  rw [Measure.bind_apply (measurableSet_singleton x) hκ.aemeasurable]
+  rw [Measure.bind_apply (measurableSet_singleton x) hκ.aemeasurable, lintegral_tilted]
   simp_rw [poissonMeasure_singleton, Real.coe_toNNReal _ (exp_pos _).le,
-    ← exp_mul_sub_exp_div_factorial]
-  by_cases hφ : Integrable fun η => exp (φ η)
-  · have hρ : AEMeasurable (fun η => ENNReal.ofReal (exp (φ η) / ∫ s, exp (φ s))) volume :=
-      (hφ.aemeasurable.div_const _).ennreal_ofReal
-    rw [lintegral_withDensity_eq_lintegral_mul₀ hρ (by fun_prop)]
-    simp_rw [Pi.mul_apply, ← ENNReal.ofReal_mul (div_nonneg (exp_pos _).le
+    ← exp_mul_sub_exp_div_factorial, ← ENNReal.ofReal_mul (div_nonneg (exp_pos _).le
       (integral_nonneg fun _ => (exp_pos _).le))]
-    rw [← ofReal_integral_eq_lintegral_ofReal
+  by_cases hφ : Integrable fun η => exp (φ η)
+  · rw [← ofReal_integral_eq_lintegral_ofReal
       (((integrable_weight_mul hφ x).div_const (∫ s, exp (φ s))).congr
         (Filter.Eventually.of_forall fun η => by simp only; ring))
       (Filter.Eventually.of_forall fun _ => by positivity), marginal, ← integral_div]
@@ -204,9 +183,8 @@ theorem bind_poissonMeasure_singleton (φ : ℝ → ℝ) (x : ℕ) :
 over the counts `x`. -/
 theorem hasSum_marginal {φ : ℝ → ℝ} (hφ : Integrable fun η => exp (φ η)) :
     HasSum (marginal φ) 1 := by
-  have := isProbabilityMeasure_latent hφ
-  have h := hasSum_poissonMixtureReal (ν := (volume.withDensity fun η =>
-      ENNReal.ofReal (exp (φ η) / ∫ s, exp (φ s))).map exp)
+  have := isProbabilityMeasure_tilted hφ
+  have h := hasSum_poissonMixtureReal (ν := (volume.tilted φ).map exp)
     ((ae_map_iff measurable_exp.aemeasurable measurableSet_Ici).2
       (Filter.Eventually.of_forall fun η => (exp_pos η).le))
   convert h using 1

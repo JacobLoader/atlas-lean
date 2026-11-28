@@ -36,9 +36,8 @@ lemma integrable_exp_neg_sq : Integrable fun η : ℝ => exp (-η ^ 2) := by
   simpa using integrable_exp_neg_mul_sq (b := 1) one_pos
 
 /-- The Gaussian latent law is a probability measure. -/
-example : IsProbabilityMeasure
-    (volume.withDensity fun η : ℝ => ENNReal.ofReal (exp (-η ^ 2) / ∫ s, exp (-s ^ 2))) :=
-  isProbabilityMeasure_latent integrable_exp_neg_sq
+example : IsProbabilityMeasure (volume.tilted fun η : ℝ => -η ^ 2) :=
+  isProbabilityMeasure_tilted integrable_exp_neg_sq
 
 /-- With a Gaussian latent log-rate, the marginal probabilities sum to one. -/
 example : HasSum (marginal fun η => -η ^ 2) 1 :=
@@ -46,9 +45,8 @@ example : HasSum (marginal fun η => -η ^ 2) 1 :=
 
 /-- With a Gaussian latent log-rate, the count `3` has probability `P_φ(3)` under the compound
 law, and so does every count. -/
-example : (volume.withDensity fun η : ℝ => ENNReal.ofReal (exp (-η ^ 2) / ∫ s, exp (-s ^ 2))).bind
-    (fun η => poissonMeasure (exp η).toNNReal) {3} =
-      ENNReal.ofReal (marginal (fun η => -η ^ 2) 3) :=
+example : (volume.tilted fun η : ℝ => -η ^ 2).bind (fun η => poissonMeasure (exp η).toNNReal) {3} =
+    ENNReal.ofReal (marginal (fun η => -η ^ 2) 3) :=
   bind_poissonMeasure_singleton (fun η => -η ^ 2) 3
 
 /-- On a one-point grid the quadrature model is the Poisson law with rate `e^{η₀}`. -/
