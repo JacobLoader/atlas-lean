@@ -13,8 +13,6 @@ public import MathlibExt.Probability.Distributions.BinomialMoments
 import Mathlib.Analysis.Calculus.Deriv.Inv
 import Mathlib.Analysis.Calculus.Deriv.MeanValue
 import Mathlib.Analysis.Calculus.SmoothSeries
-import Mathlib.Analysis.Normed.Group.FunctionSeries
-import Mathlib.Topology.Algebra.InfiniteSum.Real
 
 /-!
 # Binomial segregation of extrachromosomal DNA and its neutral moments
@@ -46,6 +44,8 @@ solution of these equations on `t ≥ 0` with a finite population `N(t) = ∑ₖ
 ## Main results
 
 * `IsSolution.totalCount_eq`: `N(t) = N(0) e^t`.
+* `IsSolution.tsum_mul_eq`, `IsSolution.tsum_sq_mul_eq`: `∑ₖ k N_k(t) = e^t ∑ₖ k N_k(0)` and
+  `∑ₖ k² N_k(t) = (∑ₖ k² N_k(0) + t ∑ₖ k N_k(0)) e^t`.
 * `IsSolution.hasDerivWithinAt_density`: the densities solve
   `dρ_k/dt = -2 ρ_k + 2 ∑ᵢ ρ_i C(2i, k) 2^{-2i}`.
 * `IsSolution.moment_one_eq`: the mean copy number is conserved, `M₁(t) = M₁(0)`.

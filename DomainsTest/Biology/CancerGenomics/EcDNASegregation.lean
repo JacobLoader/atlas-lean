@@ -12,7 +12,6 @@ import Domains.Biology.CancerGenomics.EcDNASegregation
 import Mathlib.Analysis.Calculus.Deriv.Pow
 import Mathlib.Analysis.Calculus.SmoothSeries
 import Mathlib.Analysis.SpecificLimits.Normed
-import Mathlib.Topology.Algebra.InfiniteSum.Real
 
 /-! Tests for the binomial segregation model of ecDNA: values of the segregation law and of its
 moments, the ecDNA-free population as a trivial solution, and, as a non-vacuity witness for the
