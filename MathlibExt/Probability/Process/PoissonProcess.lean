@@ -1759,8 +1759,9 @@ theorem arrivalTime_le_of_lt_count {T : ℕ → Ω → ℝ} {ω : Ω} (hT : ∀ 
 i.i.d. exponential interarrival times of rate `r > 0`, with arrival times
 `S j = arrivalTime T j` and counting process `N = count T`. For continuous `g ≥ 0`, `t ≥ 0` and
 `n : ℕ`, `E[1{N t = n} ∏_{j = 1}^{n} g (S j)] = e^{-r t} r^n (∫_0^t g)^n / n!`. With `g = 1`
-this is the Poisson law of `N t`; in general, given `N t = n`, the arrival times are distributed
-as the order statistics of `n` independent uniform points of `[0, t]`. -/
+this is the Poisson law of `N t`. For `t > 0` the right side is `P(N t = n) (t⁻¹ ∫_0^t g)^n`, its
+value when, given `N t = n`, the arrival times are the order statistics of `n` independent uniform
+points of `[0, t]`. -/
 theorem setLIntegral_prod_arrivalTime {T : ℕ → Ω → ℝ} {r : ℝ≥0} (hr : 0 < r)
     (hT : ∀ i, HasLaw (T i) (expMeasure r) P) (hind : iIndepFun T P) {g : ℝ → ℝ}
     (hg : Continuous g) (hg0 : ∀ s, 0 ≤ g s) (t : ℝ≥0) (n : ℕ) :
