@@ -22,8 +22,9 @@ import Mathlib.Tactic.NormNum
   `BB(2; 2, 2)(1) = 2/5` and `BB(2; 1/2, 1/2)(1) = 1/4`, so the pooled count `1` has probability
   `13/40`.
 * **The M-step.** `BetaBin(2, 2, 2)` has variance `2 (4 + 2) / (4 · 5) = 3/5`, and the
-  moment-matching shape of `3/5` is `((2)² - 4 · 3/5) / (8 · 3/5 - 4) = 2`. With no reads the
-  formula gives `-1/2` for every nonzero variance, and `0` at variance `0`.
+  moment-matching shape of `3/5` is `((2)² - 4 · 3/5) / (8 · 3/5 - 4) = 2`. With no reads every
+  shape gives variance `0`, so the variance determines no shape: the formula gives `-1/2` for a
+  nonzero variance and the junk value `0` at variance `0`.
 * **The expected law.** For the mixture `θ₀` that is `BetaBin(·, 2, 2)` alone (`ω₁ = 1`) and two
   reads per replicate, the pooled count of `4` reads has law `1/7, 8/35, 9/35, 8/35, 1/7`, the
   pair `(j₁, j₂)` has probability `C(2, j₁) C(2, j₂) / C(4, j₁ + j₂)` times that of `j₁ + j₂`,
@@ -108,8 +109,8 @@ example : momentMatchingShape 1 (3 / 5) = 2 := by
 example : momentMatchingShape 1 (3 / 5) = 2 :=
   (momentMatchingShape_eq_iff le_rfl (by norm_num : (0 : ℝ) < 2)).mpr (by norm_num)
 
-/-- With `c = 0` reads, no shape matches: the formula gives `-4 v / (8 v) = -1/2` for every
-variance `v ≠ 0`, and the junk value `0` at `v = 0`. -/
+/-- With `c = 0` reads every shape gives variance `0`, so the variance determines no shape: the
+formula gives `-4 v / (8 v) = -1/2` for `v ≠ 0` and the junk value `0` at `v = 0`. -/
 example (v : ℝ) (hv : v ≠ 0) : momentMatchingShape 0 v = -1 / 2 := by
   simp only [momentMatchingShape, Nat.cast_zero, mul_zero, sub_zero]
   field_simp

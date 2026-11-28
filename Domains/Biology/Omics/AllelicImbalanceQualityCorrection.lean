@@ -665,12 +665,13 @@ end quantileRatioFit
 "Calculation of quality correction constant for 2 replicates" to "Quantile analysis and QCC
 value"). The data are the maternal and paternal read counts `mat r g` and `pat r g` of each gene
 `g` in each replicate `r`; `b` is the base of the coverage bins, `bins` the bins used for this
-pair (the source keeps the bins above a coverage threshold with more than 40 of the pair's
-genes), `levels` the quantile levels (the source's are `0.2, 0.35, 0.5, 0.65, 0.8, 0.9, 0.95`),
-and `fit i` the two-component symmetric beta-binomial mixture fitted to the pooled AI of the
-pair's genes in bin `i` (the output of the source's EM algorithm). The QCC is the least-squares
-constant (`quantileRatioFit`) fitted to the ratios `Q^obs_{q,i} / Q^exp_{q,i}`, over the bins of
-`bins` that have genes and the levels `q` with `Q^exp_{q,i} ≠ 0`, of
+pair (the source keeps the bins above a coverage threshold with at least 40 of the pair's genes,
+more than 40 in the reference implementation), `levels` the quantile levels (the source's are
+`0.2, 0.35, 0.5, 0.65, 0.8, 0.9, 0.95`), and `fit i` the two-component symmetric beta-binomial
+mixture fitted to the pooled AI of the pair's genes in bin `i` (the output of the source's EM
+algorithm). The QCC is the least-squares constant (`quantileRatioFit`) fitted to the ratios
+`Q^obs_{q,i} / Q^exp_{q,i}`, over the bins of `bins` that have genes and the levels `q` with
+`Q^exp_{q,i} ≠ 0`, of
 
 * the observed quantile `Q^obs_{q,i}`: the lower `q`-quantile (`cdfQuantile`) of the empirical
   law of `ΔAI = |AI_{r g} - AI_{r' g}|` over the genes of bin `i` (`observedDeltaAILaw`), to
@@ -716,13 +717,14 @@ theorem card_replicatePairs (M : ℕ) : (replicatePairs M).card = M.choose 2 := 
 2021, Methods, Eqs. (3)–(10)): the mean, over the `C(M, 2)` pairs of replicates `r < r'`
 (`replicatePairs`), of the pairwise constants `pairQualityCorrectionConstant` of `r` and `r'`.
 Each pair has its own bins `bins r r'`, as the source bins the genes by the pair's mean coverage
-and keeps the bins above a coverage threshold with more than 40 of the pair's genes, and its own
-mixtures `fit r r' i`, fitted to the pooled AI of the pair's genes in bin `i`. The data are the
-maternal and paternal read counts `mat r g` and `pat r g` of each gene `g` in each replicate `r`,
-`b` is the base of the coverage bins and `levels` the quantile levels. With two replicates it is
-the QCC of the one pair (`qualityCorrectionConstant_two`); with fewer than two there is no pair,
-and it is `0` (`qualityCorrectionConstant_of_lt_two`). Confidence intervals for the AI of a gene
-of coverage `C` then treat it as a binomial proportion of effective coverage `C / QCC ^ 2`
+and keeps the bins above a coverage threshold with at least 40 of the pair's genes (more than 40
+in the reference implementation), and its own mixtures `fit r r' i`, fitted to the pooled AI of
+the pair's genes in bin `i`. The data are the maternal and paternal read counts `mat r g` and
+`pat r g` of each gene `g` in each replicate `r`, `b` is the base of the coverage bins and
+`levels` the quantile levels. With two replicates it is the QCC of the one pair
+(`qualityCorrectionConstant_two`); with fewer than two there is no pair, and it is `0`
+(`qualityCorrectionConstant_of_lt_two`). Confidence intervals for the AI of a gene of coverage
+`C` then treat it as a binomial proportion of effective coverage `C / QCC ^ 2`
 (`effectiveCoverage`). -/
 noncomputable def qualityCorrectionConstant {M : ℕ} (b : ℝ) (bins : Fin M → Fin M → Finset ℕ)
     (levels : Finset ℝ) (fit : Fin M → Fin M → ℕ → AIMixture) (mat pat : Fin M → γ → ℕ) : ℝ :=
