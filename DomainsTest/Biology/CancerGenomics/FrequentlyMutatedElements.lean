@@ -20,13 +20,14 @@ import Mathlib.Tactic.Ring
 /-!
 # Tests for the Poisson-binomial test for frequently mutated regulatory elements
 
-Every element has p-value `1` at zero mutated samples, and an element of length zero has p-value
-`0` at any positive count. For two samples with `1` and `2` variants over `10` covered base pairs
-and an element of one base pair, the success probabilities are `1/10` and `1/5`, so the p-values
-of one and of two mutated samples are `1 - (9/10) (4/5) = 7/25` and `(1/10) (1/5) = 1/50`; the
-p-value of two mutated samples grows to `(19/100) (9/25) = 171/2500` for an element of two base
-pairs, as `elementPValue_mono_length` says it must. Without its hypothesis `n_k ≤ n_cov` the
-p-value can decrease with the length.
+For every cohort, `elementPValue` is `1` at zero mutated samples, and `0` at any positive count
+for an element of length zero. For two samples with `1` and `2` variants over `10` covered base
+pairs and an element of one base pair, the success probabilities are `1/10` and `1/5`, so the
+p-values of one and of two mutated samples are `1 - (9/10) (4/5) = 7/25` and
+`(1/10) (1/5) = 1/50`; the p-value of two mutated samples grows to `(19/100) (9/25) = 171/2500`
+for an element of two base pairs, as `elementPValue_mono_length` says it must. Without its
+hypothesis `n_k ≤ n_cov`, under which `elementPValue` is a probability, the formula can decrease
+with the length.
 
 The hypotheses of the null model are satisfiable for every cohort and element length whenever
 `n_k ≤ n_cov`: the coordinate events of a product of Bernoulli measures on
@@ -41,11 +42,12 @@ open Domains.Biology.CancerGenomics.FrequentlyMutatedElements
 
 namespace DomainsTest.Biology.CancerGenomics.FrequentlyMutatedElements
 
-/-- Every element has p-value `1` at zero mutated samples. -/
+/-- For every cohort, `elementPValue` is `1` at zero mutated samples: the masses sum to one. -/
 example {S : ℕ} (nSNV : Fin S → ℕ) (nCov n : ℕ) : elementPValue nSNV nCov n 0 = 1 := by
   rw [elementPValue, poissonBinomialTail, ← Nat.range_succ_eq_Icc_zero, sum_poissonBinomialPMF]
 
-/-- An element of length zero has p-value `0` at every positive number of mutated samples. -/
+/-- For an element of length zero, `elementPValue` is `0` at every positive number of mutated
+samples. -/
 example {S : ℕ} (nSNV : Fin S → ℕ) (nCov s : ℕ) : elementPValue nSNV nCov 0 (s + 1) = 0 := by
   simp only [elementPValue, pow_zero, sub_self, poissonBinomialTail, poissonBinomialPMF_const]
   refine Finset.sum_eq_zero fun j hj => ?_
@@ -102,8 +104,9 @@ example : elementPValue ![1, 2] 10 1 2 ≤ elementPValue ![1, 2] 10 2 2 :=
   elementPValue_mono_length (fun k => by fin_cases k <;> decide) (by norm_num) 2
 
 /-- The hypothesis `n_k ≤ n_cov` of `elementPValue_mono_length` is needed: with `3` variants
-over one covered base pair the "rate" is `3`, the success probabilities `1 - (1 - 3) ^ n` are
-`3` and `-3` for `n = 1, 2`, and the p-value of one mutated sample decreases with the length. -/
+over one covered base pair the ratio `n_k / n_cov` is `3`, the entries `1 - (1 - 3) ^ n` of the
+vector in `elementPValue` are `3` and `-3` for `n = 1, 2`, and `elementPValue` at one mutated
+sample decreases from `3` to `-3` as the length grows. -/
 example : elementPValue ![3] 1 2 1 < elementPValue ![3] 1 1 1 := by
   have h (n : ℕ) : elementPValue ![3] 1 n 1 = 1 - (-2) ^ n := by
     have hv : (fun k : Fin 1 => 1 - (1 - (((![3] : Fin 1 → ℕ) k : ℕ) : ℝ) / ((1 : ℕ) : ℝ)) ^ n) =

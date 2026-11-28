@@ -42,8 +42,9 @@ in which one of them occurs has the Poisson-binomial law
 
 ## Main results
 
-* `elementPValue`: the p-value `P(X ≥ s)` of an element of length `n` mutated in `s` samples,
-  with the background rates `n_k / n_cov`.
+* `elementPValue`: for an element of length `n` mutated in `s` samples, the upper tail at `s` of
+  the Poisson-binomial mass function of the vector `(1 - (1 - n_k / n_cov) ^ n)_k`; it is the
+  test's p-value `P(X ≥ s)` when `n_k ≤ n_cov` for every `k` (or `n_cov = 0`).
 * `measureReal_iUnion_eq_one_sub_pow`: under the null model, sample `k` carries a mutation in
   the element with probability `1 - (1 - p_k) ^ n`.
 * `measureReal_ncard_eq_poissonBinomialPMF`, `measureReal_le_ncard_eq_poissonBinomialTail`: the
@@ -51,7 +52,7 @@ in which one of them occurs has the Poisson-binomial law
   probabilities `1 - (1 - p_k) ^ n`.
 * `measureReal_le_ncard_eq_elementPValue`: with the background rates `p_k = n_k / n_cov`, the
   probability `P(X ≥ s)` is `elementPValue`.
-* `elementPValue_mono_length`: when every rate is at most one, the p-value of a fixed number of
+* `elementPValue_mono_length`: when `n_k ≤ n_cov` for every `k`, the p-value of a fixed number of
   mutated samples does not decrease with the length of the element.
 
 ## References
@@ -72,15 +73,18 @@ Let a cohort of $S$ tumour samples have $n_k$ noncoding single-nucleotide varian
 sample $k$, and let the regions of interest cover $n_{\mathrm{cov}}$ base pairs, so that sample
 $k$ has the global background mutation rate per base pair $p_k = n_k / n_{\mathrm{cov}}$ (with
 $n_k / 0 = 0$). For a regulatory element of length $n$ base pairs in which $s$ samples carry at
-least one mutation, the p-value of the test is the upper tail
+least one mutation, `elementPValue` is the upper tail
 
 $$\sum_{j = s}^{S} \pi(j)$$
 
-of the Poisson-binomial law $\pi$ with success probabilities $1 - (1 - p_k)^n$,
-$k = 0, \dots, S - 1$: the probability, under the null hypothesis that every base pair is mutated
+of the Poisson-binomial mass function $\pi$ of the vector
+$\bigl(1 - (1 - p_k)^n\bigr)_{k = 0, \dots, S - 1}$. When $n_k \le n_{\mathrm{cov}}$ for every $k$
+(or $n_{\mathrm{cov}} = 0$), every $p_k$ and every $1 - (1 - p_k)^n$ lies in $[0, 1]$, and it is the
+p-value of the test: the probability, under the null hypothesis that every base pair is mutated
 independently at its sample's rate, that at least $s$ samples carry a mutation in the element
 (`measureReal_le_ncard_eq_elementPValue`). An element is called frequently mutated when its
-p-value is significant after correction for multiple testing. -/
+p-value is significant after correction for multiple testing. Otherwise `elementPValue` is the
+same formula, with no probabilistic meaning. -/
 noncomputable def elementPValue {S : ℕ} (nSNV : Fin S → ℕ) (nCov n s : ℕ) : ℝ :=
   poissonBinomialTail (fun k => 1 - (1 - (nSNV k : ℝ) / nCov) ^ n) s
 
@@ -166,8 +170,8 @@ theorem measureReal_le_ncard_eq_elementPValue {nSNV : Fin S → ℕ} {nCov : ℕ
     μ.real {ω | s ≤ {k | ∃ b, ω ∈ M k b}.ncard} = elementPValue nSNV nCov n s :=
   measureReal_le_ncard_eq_poissonBinomialTail (p := fun k => (nSNV k : ℝ) / nCov) hM h hp s
 
-/-- **Longer elements have larger p-values.** Let a cohort of $S$ samples have $n_k$ noncoding
-single-nucleotide variants called in sample $k$ over regions of interest covering
+/-- **The p-value does not decrease with element length.** Let a cohort of $S$ samples have
+$n_k$ noncoding single-nucleotide variants called in sample $k$ over regions of interest covering
 $n_{\mathrm{cov}}$ base pairs, with $n_k \le n_{\mathrm{cov}}$ for every $k$, so that every
 background rate $p_k = n_k / n_{\mathrm{cov}}$ lies in $[0, 1]$. If $n \le n'$, then for every
 number $s$ of mutated samples the p-value `elementPValue` of an element of length $n$ is at most
