@@ -82,9 +82,9 @@ $\bigl(1 - (1 - p_k)^n\bigr)_{k = 0, \dots, S - 1}$. When $n_k \le n_{\mathrm{co
 (or $n_{\mathrm{cov}} = 0$), every $p_k$ and every $1 - (1 - p_k)^n$ lies in $[0, 1]$, and it is the
 p-value of the test: the probability, under the null hypothesis that every base pair is mutated
 independently at its sample's rate, that at least $s$ samples carry a mutation in the element
-(`measureReal_le_ncard_eq_elementPValue`). An element is called frequently mutated when its
-p-value is significant after correction for multiple testing. Otherwise `elementPValue` is the
-same formula, with no probabilistic meaning. -/
+(`measureReal_le_ncard_eq_elementPValue`). When some $n_k > n_{\mathrm{cov}} > 0$,
+`elementPValue` is the same formula, with no probabilistic meaning. An element is called
+frequently mutated when its p-value is significant after correction for multiple testing. -/
 noncomputable def elementPValue {S : ℕ} (nSNV : Fin S → ℕ) (nCov n s : ℕ) : ℝ :=
   poissonBinomialTail (fun k => 1 - (1 - (nSNV k : ℝ) / nCov) ^ n) s
 
