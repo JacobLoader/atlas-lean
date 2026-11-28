@@ -23,9 +23,10 @@ public import Mathlib.Data.Fintype.EquivFin
 * The run is stopped from outside after `t n` rounds: on every graph, a node that counts rounds
   outputs `n` for `t = id` (`counterAlg_output`); `decide` checks it on the edgeless graph on
   three nodes.
-* Run for one round on the path `0 - 1 - 2` with identifiers `1, 2, 3`, the broadcast form gives
-  the same outputs as `degreeAlg` and as an algorithm that sends each neighbour that neighbour's
-  own identifier (the general result is `LocalAlgorithm.broadcast_output`).
+* Run for one round on the path `0 - 1 - 2` with identifiers `1, 2, 3`, `degreeAlg` and an
+  algorithm that sends each neighbour that neighbour's own identifier give the same outputs as
+  their broadcast forms (`1, 2, 1` and `1, 4, 3`); the general result is
+  `LocalAlgorithm.broadcast_output`.
 * An example algorithm: in one round every node learns its degree, the number of messages it
   receives (`degreeAlg_output`); `decide` evaluates it on the path `0 - 1 - 2`.
 * Flooding the largest identifier: on the path `0 - 1 - 2 - 3` with identifiers `1, 2, 3, 4`,

@@ -33,9 +33,9 @@ are arbitrary functions, so message size and local computation are unrestricted.
   identifier `j`, and moves to `update s m`, where `m` is the multiset of messages its neighbours
   sent it; a node in state `s` outputs `out s`. The multiset does not record the senders; a node
   can include its identifier in its messages.
-* **Knowledge.** A node's state starts from only its identifier and its input; unlike in
-  Suomela's port-numbering model, it does not start knowing its degree, and there are no ports.
-  A node learns its neighbours' identifiers only from messages that carry them. The maps
+* **Knowledge.** `init` receives only the node's own identifier and its input; the model gives it
+  no list of neighbours and, unlike Suomela's port-numbering model, no degree and no ports.
+  Anything else a node knows at time zero comes through its input, which is arbitrary. The maps
   of a `LocalAlgorithm` do not take `n`, but the algorithm is a parameter, so a statement may
   choose it depending on `n` or on the graph (Linial's lower bounds hold even if every processor
   knows the graph in advance, and only the identifiers are unknown). Choosing it after seeing the
