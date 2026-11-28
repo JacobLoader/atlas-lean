@@ -34,6 +34,8 @@ reduce to the Chu–Vandermonde identity `(α + β)^{(n)} = ∑ₖ C(n, k) α^{(
 * `ProbabilityTheory.ascPochhammer_eval_add_eq_sum`: Chu–Vandermonde for rising factorials.
 * `ProbabilityTheory.sum_betaBinomialPMF`: the beta-binomial masses sum to one.
 * `ProbabilityTheory.hasSum_negBinomialPMF`: the negative binomial masses sum to one.
+* `ProbabilityTheory.hasSum_negBinomialPMF_mul_pow`: the generating function
+  `∑ₖ NB(k; r, p) zᵏ = (p / (1 - (1 - p) z)) ^ r` for `|z| ≤ 1`.
 * `ProbabilityTheory.sum_negBinomialPMF_mul`: `NB(r₁, p) * NB(r₂, p) = NB(r₁ + r₂, p)`.
 * `ProbabilityTheory.negBinomialPMF_mul_div_eq_betaBinomialPMF`: the conditional mass ratio is
   beta-binomial.
@@ -125,6 +127,39 @@ theorem hasSum_negBinomialPMF {r p : ℝ} (hr : 0 < r) (hp : 0 < p) (hp1 : p ≤
     unfold negBinomialPMF
     ring
   · exact (div_mul_cancel₀ 1 ((Real.rpow_ne_zero hp.le (ne_of_gt hr)).2 hp.ne')).symm
+
+/-- The negative binomial masses are nonnegative for `r > 0` and `p ∈ [0, 1]`. -/
+theorem negBinomialPMF_nonneg {r p : ℝ} (hr : 0 < r) (hp : 0 ≤ p) (hp1 : p ≤ 1) (k : ℕ) :
+    0 ≤ negBinomialPMF r p k := by
+  have := ascPochhammer_pos k r hr
+  have h1 : 0 ≤ 1 - p := by linarith
+  unfold negBinomialPMF
+  positivity
+
+/-- **The generating function of the negative binomial law.** For real `r`, `p ∈ (0, 1]` and
+`|z| ≤ 1`, `∑ₖ NB(k; r, p) zᵏ = (p / (1 - (1 - p) z)) ^ r` (the binomial series; for `r > 0` it is
+the generating function of the law `NB(r, p)`). -/
+theorem hasSum_negBinomialPMF_mul_pow {r p z : ℝ} (hp : 0 < p) (hp1 : p ≤ 1) (hz : |z| ≤ 1) :
+    HasSum (fun k : ℕ ↦ negBinomialPMF r p k * z ^ k) ((p / (1 - (1 - p) * z)) ^ r) := by
+  set x := (1 - p) * z with hxdef
+  have hx1 : |x| < 1 := by
+    rw [hxdef, abs_mul, abs_of_nonneg (sub_nonneg.2 hp1)]
+    calc (1 - p) * |z| ≤ (1 - p) * 1 := mul_le_mul_of_nonneg_left hz (by linarith)
+      _ < 1 := by linarith
+  have hxpos : 0 < 1 - x := by linarith [le_abs_self x]
+  have hx : x ∈ Metric.eball (0 : ℝ) (1 : ENNReal) := by
+    rw [← ENNReal.ofReal_one, Metric.eball_ofReal]
+    simpa [Real.dist_eq] using hx1
+  have hs := (Real.one_div_one_sub_rpow_hasFPowerSeriesOnBall_zero r).hasSum hx
+  simp only [FormalMultilinearSeries.ofScalars_apply_eq, smul_eq_mul,
+    choose_eq_ascPochhammer_div, zero_add] at hs
+  convert hs.mul_right (p ^ r) using 1
+  · funext k
+    unfold negBinomialPMF
+    rw [hxdef, mul_pow]
+    ring
+  · rw [Real.div_rpow hp.le hxpos.le]
+    ring
 
 private theorem negBinomialPMF_mul_eq (r₁ r₂ : ℝ) {p : ℝ} (hp : 0 < p)
     {n k : ℕ} (hk : k ≤ n) :

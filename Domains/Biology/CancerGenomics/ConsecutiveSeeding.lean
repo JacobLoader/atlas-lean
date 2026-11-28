@@ -11,6 +11,7 @@ module
 public import MathlibExt.Probability.Process.PoissonProcess
 public import MathlibExt.Probability.BranchingProcess.LinearBirthDeath
 public import MathlibExt.Probability.Distributions.NegativeBinomialSplitting
+public import MathlibExt.Probability.ProbabilityGeneratingFunction
 public import Mathlib.Probability.ProductMeasure
 import MathlibExt.Probability.Distributions.NegativeBinomial
 import Mathlib.Analysis.Analytic.IsolatedZeros
@@ -44,12 +45,12 @@ times, they are independent, the lineage founded at time `s` having Kendall's la
 `LinearBirthDeath.prob b d (t - s)` of a linear birth–death process started from one cell. The
 model exists for every family of rates (`exists_isClonalSeeding`).
 
-**The proof.** Conditioning on the first interarrival time gives the generating functional of the
-arrivals: `E[1{N(t) = n} ∏_{j ≤ n} g(S_j)] = e^{-λ t} λ^n (∫_0^t g)^n / n!` for continuous
-`g ≥ 0`. With `g(s)` the generating function of a lineage of age `t - s` (Kendall), this gives
-`E z^{y(t)} = (q / (1 - (1 - q) z))^{λ / b}` (`IsClonalSeeding.lintegral_pow_cloneSize`), the
-generating function of the negative binomial law; a law on `ℕ` is determined by its generating
-function on `(0, 1)` (isolated zeros of analytic functions).
+**The proof.** The generating functional of the arrivals
+(`PoissonProcess.setLIntegral_prod_arrivalTime`) and Kendall's generating function of a lineage
+(`LinearBirthDeath.hasSum_prob_mul_pow_of_ne`) give
+`E z^{y(t)} = (q / (1 - (1 - q) z))^{λ / b}` (`IsClonalSeeding.pgf_cloneSize`), the generating
+function of the negative binomial law (`hasSum_negBinomialPMF_mul_pow`); a law on `ℕ` is
+determined by its generating function on `(0, 1)` (isolated zeros of analytic functions).
 
 ## Main definitions
 
@@ -63,8 +64,8 @@ function on `(0, 1)` (isolated zeros of analytic functions).
 * `negBinomial_cloneSizes`: the mean, the negative binomial law and the independence of the clone
   sizes.
 * `IsClonalSeeding.measureReal_cloneSize`: `P(y(t) = m) = NB(m; λ / b, q(t))`.
-* `IsClonalSeeding.integral_cloneSize`: `E y(t) = ȳ(t)`.
-* `IsClonalSeeding.lintegral_pow_cloneSize`: the generating function of `y(t)`.
+* `IsClonalSeeding.integrable_cloneSize`, `IsClonalSeeding.integral_cloneSize`: `E y(t) = ȳ(t)`.
+* `IsClonalSeeding.pgf_cloneSize`: the generating function of `y(t)`.
 * `hasDerivAt_meanSize`, `successProb_eq_div`: `ȳ' = r ȳ + λ` and `q = k / (ȳ + k)`.
 * `iIndepFun_cloneSize`: clones with independent data have independent sizes.
 * `exists_isClonalSeeding`: the model exists.
@@ -110,69 +111,12 @@ private lemma lineageDenom_pos {b d u z : ℝ} (hdb : d < b) (hb : 0 < b) (hu : 
     mul_le_mul_of_nonneg_left hE (mul_nonneg hb.le (by linarith))
   nlinarith
 
-/-- **Kendall's generating function.** For `0 ≤ d < b`, `u ≥ 0` and `0 ≤ z ≤ 1`, the law of a
-linear birth–death lineage of age `u` started from one cell has generating function
-`lineagePGF b d u z`. -/
-private theorem hasSum_prob_mul_pow {b d u z : ℝ} (hd : 0 ≤ d) (hdb : d < b) (hu : 0 ≤ u)
-    (hz0 : 0 ≤ z) (hz1 : z ≤ 1) :
-    HasSum (fun m : ℕ ↦ LinearBirthDeath.prob b d u m * z ^ m) (lineagePGF b d u z) := by
-  have hb : 0 < b := by linarith
-  have hne : b ≠ d := ne_of_gt hdb
-  set E := exp ((b - d) * u) with hE_def
-  have hE : 1 ≤ E := one_le_exp (mul_nonneg (by linarith) hu)
-  have hden : 0 < b * E - d := by nlinarith
-  have hα : LinearBirthDeath.extinctionProb b d u = d * (E - 1) / (b * E - d) := by
-    simp [LinearBirthDeath.extinctionProb, hne, hE_def]
-  have hβ : LinearBirthDeath.geomRatio b d u = b * (E - 1) / (b * E - d) := by
-    simp [LinearBirthDeath.geomRatio, hne, hE_def]
-  set β := b * (E - 1) / (b * E - d) with hβ_def
-  have hβ0 : 0 ≤ β := div_nonneg (mul_nonneg hb.le (by linarith)) hden.le
-  have hβ1 : β < 1 := by
-    rw [div_lt_one hden]
-    linarith
-  have hβz0 : 0 ≤ β * z := mul_nonneg hβ0 hz0
-  have hβz1 : β * z < 1 := by nlinarith
-  have hg := (hasSum_geometric_of_lt_one hβz0 hβz1).mul_left
-    ((1 - d * (E - 1) / (b * E - d)) * (1 - β) * z)
-  have hD := lineageDenom_pos hdb hb hu hz1 (d := d)
-  refine (hasSum_nat_add_iff' 1).1 ?_
-  simp only [Finset.range_one, Finset.sum_singleton, pow_zero, mul_one]
-  convert hg using 1
-  · funext n
-    simp only [LinearBirthDeath.prob, hα, hβ]
-    ring_nf
-  · rw [show LinearBirthDeath.prob b d u 0 = d * (E - 1) / (b * E - d) from hα]
-    unfold lineagePGF lineageDenom
-    rw [← hE_def]
-    have hDpos : 0 < b * (1 - z) * E + b * z - d := by
-      unfold lineageDenom at hD
-      rw [← hE_def] at hD
-      exact hD
-    rw [hβ_def]
-    clear_value E β
-    have hden' : b * E - d ≠ 0 := hden.ne'
-    have hD' : b * (1 - z) * E + b * z - d ≠ 0 := hDpos.ne'
-    have h1βz : 1 - b * (E - 1) / (b * E - d) * z ≠ 0 := by
-      rw [div_mul_eq_mul_div, one_sub_div hden']
-      refine div_ne_zero ?_ hden'
-      intro h; apply hD'; linear_combination h
-    have hD'' : b * E - b * E * z + b * z - d ≠ 0 := by
-      intro h; apply hD'; linear_combination h
-    have hD3 : E * b - E * b * z + b * z - d ≠ 0 := by
-      intro h; apply hD'; linear_combination h
-    have e1 : 1 - d * (E - 1) / (b * E - d) = (b - d) * E / (b * E - d) := by
-      rw [one_sub_div hden']; congr 1; ring
-    have e2 : 1 - b * (E - 1) / (b * E - d) = (b - d) / (b * E - d) := by
-      rw [one_sub_div hden']; congr 1; ring
-    have e3 : 1 - b * (E - 1) / (b * E - d) * z = (b * (1 - z) * E + b * z - d) / (b * E - d) := by
-      rw [div_mul_eq_mul_div, one_sub_div hden']; congr 1; ring
-    rw [e1, e2, e3]
-    clear e1 e2 e3 h1βz hD'' hD3 hg
-    generalize hC : b * E - d = C at *
-    generalize hDD : b * (1 - z) * E + b * z - d = D at *
-    field_simp
-    subst hC hDD
-    ring
+/-- Kendall's generating function of a lineage of age `u`
+(`LinearBirthDeath.hasSum_prob_mul_pow_of_ne`). -/
+private lemma hasSum_prob_mul_pow_lineagePGF {b d u z : ℝ} (hd : 0 ≤ d) (hdb : d < b)
+    (hu : 0 ≤ u) (hz0 : 0 ≤ z) (hz1 : z ≤ 1) :
+    HasSum (fun m : ℕ ↦ LinearBirthDeath.prob b d u m * z ^ m) (lineagePGF b d u z) :=
+  LinearBirthDeath.hasSum_prob_mul_pow_of_ne (by linarith) hd hu hdb.ne' hz0 hz1
 
 /-- `1 - E z^{X(u)}` integrates in closed form: `∫_0^t (1 - lineagePGF b d u z) du =
 log (lineageDenom b d t z / (b - d)) / b`. -/
@@ -208,7 +152,7 @@ private theorem integral_one_sub_lineagePGF {b d z t : ℝ} (hdb : d < b) (hb : 
 
 private lemma lineagePGF_nonneg {b d u z : ℝ} (hd : 0 ≤ d) (hdb : d < b) (hu : 0 ≤ u) (hz0 : 0 ≤ z)
     (hz1 : z ≤ 1) : 0 ≤ lineagePGF b d u z :=
-  (hasSum_prob_mul_pow hd hdb hu hz0 hz1).nonneg fun m ↦
+  (hasSum_prob_mul_pow_lineagePGF hd hdb hu hz0 hz1).nonneg fun m ↦
     mul_nonneg (LinearBirthDeath.prob_nonneg (by linarith) hd hu m) (pow_nonneg hz0 m)
 
 /-- The generating function of a lineage founded at time `s`, evaluated at time `t` (age
@@ -331,23 +275,6 @@ theorem hasDerivAt_meanSize {lam b d : ℝ} (hdb : d < b) (hb : 0 < b) (s : ℝ)
   field_simp
   ring
 
-/-- **Generating function of the negative binomial law.** For `k > 0`, `0 < q ≤ 1` and
-`0 ≤ z ≤ 1`, `∑_m NB(m; k, q) z^m = (q / (1 - (1 - q) z))^k`. -/
-private theorem hasSum_negBinomialPMF_mul_pow {k q z : ℝ} (hk : 0 < k) (hq : 0 < q) (hq1 : q ≤ 1)
-    (hz0 : 0 ≤ z) (hz1 : z ≤ 1) :
-    HasSum (fun m : ℕ ↦ negBinomialPMF k q m * z ^ m) ((q / (1 - (1 - q) * z)) ^ k) := by
-  set q' := 1 - (1 - q) * z with hq'
-  have hq'0 : 0 < q' := by nlinarith
-  have hq'1 : q' ≤ 1 := by nlinarith
-  have h := (hasSum_negBinomialPMF hk hq'0 hq'1).mul_left ((q / q') ^ k)
-  rw [mul_one] at h
-  convert h using 1
-  funext m
-  unfold negBinomialPMF
-  have h1q : 1 - q' = (1 - q) * z := by rw [hq']; ring
-  rw [h1q, Real.div_rpow hq.le hq'0.le, mul_pow]
-  field_simp
-
 /-- **A law on `ℕ` is determined by its generating function on `(0, 1)`.** If two bounded
 sequences have equal power series on `(0, 1)`, they are equal. -/
 private theorem eq_of_tsum_mul_pow_eq {p q : ℕ → ℝ} (hp : ∀ m, |p m| ≤ 1) (hq : ∀ m, |q m| ≤ 1)
@@ -395,13 +322,6 @@ private theorem eq_of_tsum_mul_pow_eq {p q : ℕ → ℝ} (hp : ∀ m, |p m| ≤
   have hF0 : F = 0 := hser.hasFPowerSeriesAt.eq_zero_of_eventually hzero
   rw [hF, FormalMultilinearSeries.ofScalars_series_eq_zero] at hF0
   exact sub_eq_zero.1 hF0
-
-private lemma negBinomialPMF_nonneg {k q : ℝ} (hk : 0 < k) (hq : 0 ≤ q) (hq1 : q ≤ 1) (m : ℕ) :
-    0 ≤ negBinomialPMF k q m := by
-  have := ascPochhammer_pos m k hk
-  have h1 : 0 ≤ 1 - q := by linarith
-  unfold negBinomialPMF
-  positivity
 
 private lemma intervalIntegrable_lineagePGF {b d z t : ℝ} (hdb : d < b) (hb : 0 < b) (hz1 : z ≤ 1)
     (ht : 0 ≤ t) : IntervalIntegrable (fun u ↦ lineagePGF b d u z) volume 0 t := by
@@ -451,299 +371,12 @@ private lemma lintegral_comp_nat {Ω : Type*} {mΩ : MeasurableSpace Ω} {P : Me
   rw [Measure.map_apply hY (measurableSet_singleton m)]
   rfl
 
-/-! ### Arrival times of exponential interarrivals -/
+/-- The `n`-th arrival time `x 0 + ⋯ + x (n - 1)` of an interarrival sequence `x`. -/
+private noncomputable abbrev psum (x : ℕ → ℝ) (n : ℕ) : ℝ :=
+  arrivalTime (fun i (y : ℕ → ℝ) ↦ y i) n x
 
-/-- The partial sum `x 0 + ⋯ + x (n - 1)` of a sequence: the `n`-th arrival time of the
-interarrival sequence `x`. -/
-private def psum (x : ℕ → ℝ) (n : ℕ) : ℝ := ∑ i ∈ Finset.range n, x i
-
-/-- `seqCons a y` prepends `a` to the sequence `y`. -/
-private def seqCons (a : ℝ) (y : ℕ → ℝ) : ℕ → ℝ
-  | 0 => a
-  | i + 1 => y i
-
-private lemma psum_seqCons_succ (a : ℝ) (y : ℕ → ℝ) (n : ℕ) :
-    psum (seqCons a y) (n + 1) = a + psum y n := by
-  rw [psum, Finset.sum_range_succ', add_comm]
-  rfl
-
-private lemma measurable_psum (n : ℕ) : Measurable fun x : ℕ → ℝ ↦ psum x n := by
-  unfold psum
-  fun_prop
-
-private lemma measurable_seqCons : Measurable (fun p : ℝ × (ℕ → ℝ) ↦ seqCons p.1 p.2) := by
-  rw [measurable_pi_iff]
-  intro i
-  cases i with
-  | zero => exact measurable_fst
-  | succ i => exact (measurable_pi_apply i).comp measurable_snd
-
-/-- The i.i.d. product of rate-`r` exponential laws on sequences. -/
-private noncomputable abbrev expSeq (r : ℝ) : Measure (ℕ → ℝ) :=
-  Measure.infinitePi fun _ : ℕ ↦ expMeasure r
-
-private lemma map_seqCons_expSeq {r : ℝ} (hr : 0 < r) :
-    ((expMeasure r).prod (expSeq r)).map (fun p ↦ seqCons p.1 p.2) = expSeq r := by
-  have := isProbabilityMeasure_expMeasure hr
-  refine Measure.eq_infinitePi _ fun s t ht ↦ ?_
-  classical
-  obtain ⟨N, hN⟩ : ∃ N, s ⊆ Finset.range (N + 1) :=
-    ⟨s.sup id, fun i hi ↦ Finset.mem_range.2 (Nat.lt_succ_of_le (Finset.le_sup (f := id) hi))⟩
-  set t' : ℕ → Set ℝ := fun i ↦ if i ∈ s then t i else univ with ht'
-  have hmt' : ∀ i, MeasurableSet (t' i) := by
-    intro i
-    simp only [ht']
-    split_ifs
-    exacts [ht i, .univ]
-  have hpi : Set.pi (s : Set ℕ) t = Set.pi (Finset.range (N + 1) : Set ℕ) t' := by
-    ext x
-    simp only [Set.mem_pi, Finset.mem_coe, ht']
-    constructor
-    · intro h i _
-      split_ifs with hi
-      exacts [h i hi, trivial]
-    · intro h i hi
-      simpa [hi] using h i (hN hi)
-  have hprod : ∏ i ∈ s, expMeasure r (t i) =
-      ∏ i ∈ Finset.range (N + 1), expMeasure r (t' i) := by
-    rw [← Finset.prod_subset hN]
-    · exact Finset.prod_congr rfl fun i hi ↦ by simp [ht', hi]
-    · intro i _ hi
-      simp [ht', hi]
-  rw [hpi, hprod, Measure.map_apply measurable_seqCons (MeasurableSet.pi
-    (Finset.countable_toSet _) fun i _ ↦ hmt' i)]
-  have hpre : (fun p : ℝ × (ℕ → ℝ) ↦ seqCons p.1 p.2) ⁻¹'
-      Set.pi (Finset.range (N + 1) : Set ℕ) t' =
-      t' 0 ×ˢ Set.pi (Finset.range N : Set ℕ) (fun i ↦ t' (i + 1)) := by
-    ext ⟨a, y⟩
-    simp only [Set.mem_preimage, Set.mem_pi, Finset.coe_range, Set.mem_Iio, Set.mem_prod]
-    constructor
-    · intro h
-      exact ⟨h 0 (Nat.succ_pos N), fun i hi ↦ h (i + 1) (by omega)⟩
-    · rintro ⟨h0, h⟩ i hi
-      cases i with
-      | zero => exact h0
-      | succ i => exact h i (by omega)
-  have : ∀ i : ℕ, IsProbabilityMeasure ((fun _ : ℕ ↦ expMeasure r) i) := fun _ ↦ this
-  rw [hpre, Measure.prod_prod, Measure.infinitePi_pi (μ := fun _ : ℕ ↦ expMeasure r)
-    (mt := fun i _ ↦ hmt' (i + 1)), Finset.prod_range_succ', mul_comm]
-
-private lemma expMeasure_Ioi {r : ℝ} (hr : 0 < r) {u : ℝ} (hu : 0 ≤ u) :
-    expMeasure r (Ioi u) = ENNReal.ofReal (exp (-(r * u))) := by
-  have := isProbabilityMeasure_expMeasure hr
-  apply (ENNReal.toReal_eq_toReal_iff' (measure_ne_top _ _) ENNReal.ofReal_ne_top).mp
-  rw [ENNReal.toReal_ofReal (exp_pos _).le]
-  change (expMeasure r).real (Ioi u) = _
-  have huniv : (expMeasure r).real univ = 1 := by simp [measureReal_def]
-  rw [← compl_Iic, measureReal_compl measurableSet_Iic, huniv,
-    ← cdf_eq_real, cdf_expMeasure_eq hr, ite_eq_left hu]
-  ring
-
-private lemma ae_expSeq_nonneg {r : ℝ} (hr : 0 < r) : ∀ᵐ y ∂expSeq r, ∀ i, 0 ≤ y i := by
-  have := isProbabilityMeasure_expMeasure hr
-  rw [ae_all_iff]
-  intro i
-  have hm : (expSeq r).map (fun y ↦ y i) = expMeasure r :=
-    Measure.infinitePi_map_eval (fun _ : ℕ ↦ expMeasure r) i
-  have h0 : ∀ᵐ x ∂expMeasure r, 0 ≤ x := by
-    rw [ae_iff]
-    have heq : {a : ℝ | ¬0 ≤ a} = Iio 0 := by ext; simp
-    rw [heq, expMeasure, gammaMeasure, withDensity_apply _ measurableSet_Iio]
-    exact lintegral_gammaPDF_of_nonpos le_rfl
-  rw [← hm] at h0
-  exact ae_of_ae_map (measurable_pi_apply i).aemeasurable h0
-
-private lemma integral_eq_sub_primitive {h : ℝ → ℝ} (hh : Continuous h) (x y : ℝ) :
-    ∫ s in x..y, h s = (∫ s in (0 : ℝ)..y, h s) - ∫ s in (0 : ℝ)..x, h s :=
-  (intervalIntegral.integral_interval_sub_left (hh.intervalIntegrable (μ := volume) 0 y)
-    (hh.intervalIntegrable 0 x)).symm
-
-private lemma continuous_primitive' {h : ℝ → ℝ} (hh : Continuous h) :
-    Continuous fun x : ℝ ↦ ∫ s in (0 : ℝ)..x, h s :=
-  continuous_iff_continuousAt.2 fun x ↦ (hh.integral_hasStrictDerivAt 0 x).hasDerivAt.continuousAt
-
-/-- The calculus identity behind the Poisson counts:
-`∫_0^t h(a + c) (∫_{a+c}^{a+t} h)^n dc = (∫_a^{a+t} h)^{n+1} / (n + 1)` for continuous `h`. -/
-private lemma integral_mul_integral_pow {h : ℝ → ℝ} (hh : Continuous h) (a t : ℝ) (n : ℕ) :
-    ∫ c in (0 : ℝ)..t, h (a + c) * (∫ s in (a + c)..(a + t), h s) ^ n =
-      (∫ s in a..(a + t), h s) ^ (n + 1) / (n + 1) := by
-  set H : ℝ → ℝ := fun x ↦ ∫ s in (0 : ℝ)..x, h s with hH
-  have hint : ∀ x y : ℝ, ∫ s in x..y, h s = H y - H x := fun x y ↦
-    (intervalIntegral.integral_interval_sub_left (hh.intervalIntegrable 0 y)
-      (hh.intervalIntegrable 0 x)).symm
-  simp_rw [hint]
-  have hHd : ∀ x, HasDerivAt H (h x) x := fun x ↦
-    (hh.integral_hasStrictDerivAt 0 x).hasDerivAt
-  have hderiv : ∀ c ∈ uIcc (0 : ℝ) t, HasDerivAt
-      (fun c ↦ -(H (a + t) - H (a + c)) ^ (n + 1) / (n + 1))
-      (h (a + c) * (H (a + t) - H (a + c)) ^ n) c := by
-    intro c _
-    have h1 : HasDerivAt (fun c ↦ H (a + c)) (h (a + c)) c := (hHd (a + c)).comp_const_add a c
-    have h2 := ((h1.const_sub (H (a + t))).pow (n + 1)).neg.div_const ((n : ℝ) + 1)
-    convert h2 using 1
-    simp only [Nat.add_sub_cancel]
-    push_cast
-    field_simp
-  have hcont : Continuous fun c ↦ h (a + c) * (H (a + t) - H (a + c)) ^ n := by
-    have : Continuous H := continuous_iff_continuousAt.2 fun x ↦ (hHd x).continuousAt
-    fun_prop
-  rw [intervalIntegral.integral_eq_sub_of_hasDerivAt hderiv (hcont.intervalIntegrable _ _)]
-  simp only [add_zero, sub_self, ne_eq, Nat.add_eq_zero_iff, one_ne_zero, and_false,
-    not_false_eq_true, zero_pow, neg_zero, zero_div, zero_sub, neg_div, neg_neg]
-
-/-- On the canonical space of interarrival sequences: on the event that exactly `n` arrivals
-fall in `[0, t]`, the product of `h` over these arrival times shifted by `a`; zero off that
-event. -/
-private noncomputable def gapIntegrand (h : ℝ → ℝ) (n : ℕ) (a t : ℝ) (x : ℕ → ℝ) : ℝ≥0∞ :=
-  {x : ℕ → ℝ | psum x n ≤ t ∧ t < psum x (n + 1)}.indicator
-    (fun x ↦ ∏ j : Fin n, ENNReal.ofReal (h (a + psum x (j + 1)))) x
-
-private lemma measurableSet_gap (n : ℕ) (t : ℝ) :
-    MeasurableSet {x : ℕ → ℝ | psum x n ≤ t ∧ t < psum x (n + 1)} :=
-  (measurableSet_le (measurable_psum n) measurable_const).inter
-    (measurableSet_lt measurable_const (measurable_psum (n + 1)))
-
-private lemma measurable_gapIntegrand {h : ℝ → ℝ} (hh : Measurable h) (n : ℕ) (a t : ℝ) :
-    Measurable (gapIntegrand h n a t) := by
-  unfold gapIntegrand
-  refine Measurable.indicator ?_ (measurableSet_gap n t)
-  exact Finset.measurable_prod _ fun j _ ↦
-    ENNReal.measurable_ofReal.comp (hh.comp (measurable_const.add (measurable_psum _)))
-
-private lemma gapIntegrand_seqCons (h : ℝ → ℝ) (n : ℕ) (a t c : ℝ) (y : ℕ → ℝ) :
-    gapIntegrand h (n + 1) a t (seqCons c y) =
-      ENNReal.ofReal (h (a + c)) * gapIntegrand h n (a + c) (t - c) y := by
-  unfold gapIntegrand
-  have hmem : seqCons c y ∈ {x : ℕ → ℝ | psum x (n + 1) ≤ t ∧ t < psum x (n + 1 + 1)} ↔
-      y ∈ {x : ℕ → ℝ | psum x n ≤ t - c ∧ t - c < psum x (n + 1)} := by
-    simp only [mem_ofPred_eq, psum_seqCons_succ]
-    constructor <;> rintro ⟨h1, h2⟩ <;> constructor <;> linarith
-  by_cases hy : y ∈ {x : ℕ → ℝ | psum x n ≤ t - c ∧ t - c < psum x (n + 1)}
-  · rw [indicator_of_mem (hmem.2 hy), indicator_of_mem hy, Fin.prod_univ_succ]
-    congr 1
-    · simp [psum, seqCons]
-    · refine Finset.prod_congr rfl fun j _ ↦ ?_
-      rw [show ((j.succ : Fin (n + 1)) : ℕ) + 1 = (j : ℕ) + 1 + 1 by simp, psum_seqCons_succ,
-        add_assoc]
-  · rw [indicator_of_notMem (fun h ↦ hy (hmem.1 h)), indicator_of_notMem hy, mul_zero]
-
-/-- One step of the induction: integrating out the first interarrival time. -/
-private lemma lintegral_expMeasure_step {r : ℝ} (hr : 0 < r) {h : ℝ → ℝ} (hh : Continuous h)
-    (hh0 : ∀ s, 0 ≤ h s) (n : ℕ) (a t : ℝ) :
-    ∫⁻ c, ENNReal.ofReal (h (a + c)) * ENNReal.ofReal (if 0 ≤ t - c then
-        exp (-(r * (t - c))) * r ^ n * (∫ s in (a + c)..(a + c + (t - c)), h s) ^ n / n !
-        else 0) ∂expMeasure r =
-      ENNReal.ofReal (if 0 ≤ t then
-        exp (-(r * t)) * r ^ (n + 1) * (∫ s in a..(a + t), h s) ^ (n + 1) / (n + 1)! else 0) := by
-  set F : ℝ → ℝ := fun c ↦ r ^ (n + 1) * exp (-(r * t)) / n ! *
-    (h (a + c) * (∫ s in (a + c)..(a + t), h s) ^ n) with hF
-  have hpt : ∀ c, gammaPDF 1 r c * (ENNReal.ofReal (h (a + c)) * ENNReal.ofReal
-      (if 0 ≤ t - c then exp (-(r * (t - c))) * r ^ n *
-        (∫ s in (a + c)..(a + c + (t - c)), h s) ^ n / n ! else 0)) =
-      (Icc 0 t).indicator (fun c ↦ ENNReal.ofReal (F c)) c := by
-    intro c
-    by_cases hc0 : 0 ≤ c
-    · by_cases hct : c ≤ t
-      · rw [indicator_of_mem (show c ∈ Icc 0 t from ⟨hc0, hct⟩)]
-        change exponentialPDF r c * _ = _
-        have htc : 0 ≤ t - c := by linarith
-        rw [exponentialPDF_of_nonneg hc0, show a + c + (t - c) = a + t by ring]
-        simp only [htc, ↓reduceIte]
-        have hI : 0 ≤ ∫ s in (a + c)..(a + t), h s :=
-          intervalIntegral.integral_nonneg (by linarith) fun s _ ↦ hh0 s
-        rw [← ENNReal.ofReal_mul (hh0 _), ← ENNReal.ofReal_mul (by positivity)]
-        congr 1
-        rw [hF]
-        have he : exp (-(r * c)) * exp (-(r * (t - c))) = exp (-(r * t)) := by
-          rw [← exp_add]; congr 1; ring
-        rw [← he]
-        ring
-      · have htc : ¬ 0 ≤ t - c := by linarith
-        rw [indicator_of_notMem (show c ∉ Icc 0 t from fun h ↦ hct h.2)]
-        simp [htc]
-    · rw [gammaPDF_of_neg (lt_of_not_ge hc0), zero_mul,
-        indicator_of_notMem (show c ∉ Icc 0 t from fun h ↦ hc0 h.1)]
-  rw [expMeasure, gammaMeasure, lintegral_withDensity_eq_lintegral_mul _
-    (by unfold gammaPDF; fun_prop) (by
-      refine Measurable.mul (ENNReal.measurable_ofReal.comp (hh.measurable.comp
-        (measurable_const.add measurable_id))) ?_
-      refine ENNReal.measurable_ofReal.comp (Measurable.ite ?_ ?_ measurable_const)
-      · exact measurableSet_le measurable_const (measurable_const.sub measurable_id)
-      · have hc : Continuous fun c : ℝ ↦ ∫ s in (a + c)..(a + c + (t - c)), h s := by
-          have he : (fun c : ℝ ↦ ∫ s in (a + c)..(a + c + (t - c)), h s) =
-              fun c ↦ (∫ s in (0 : ℝ)..(a + t), h s) - ∫ s in (0 : ℝ)..(a + c), h s := by
-            funext c
-            rw [show a + c + (t - c) = a + t by ring, integral_eq_sub_primitive hh (a + c) (a + t)]
-          rw [he]
-          have hH := continuous_primitive' hh
-          fun_prop
-        exact (by fun_prop : Continuous fun c : ℝ ↦ exp (-(r * (t - c))) * r ^ n *
-          (∫ s in (a + c)..(a + c + (t - c)), h s) ^ n / n !).measurable)]
-  simp only [Pi.mul_apply]
-  simp_rw [hpt]
-  rw [lintegral_indicator measurableSet_Icc]
-  have hHc := continuous_primitive' hh
-  have hFc : Continuous F := by
-    have he : F = fun c ↦ r ^ (n + 1) * exp (-(r * t)) / n ! * (h (a + c) *
-        ((∫ s in (0 : ℝ)..(a + t), h s) - ∫ s in (0 : ℝ)..(a + c), h s) ^ n) := by
-      funext c
-      simp only [hF]
-      rw [integral_eq_sub_primitive hh (a + c) (a + t)]
-    rw [he]
-    fun_prop
-  split_ifs with ht
-  · rw [← ofReal_integral_eq_lintegral_ofReal (hFc.integrableOn_Icc)]
-    · rw [integral_Icc_eq_integral_Ioc, ← intervalIntegral.integral_of_le ht, hF,
-        intervalIntegral.integral_const_mul, integral_mul_integral_pow hh a t n]
-      congr 1
-      rw [Nat.factorial_succ]
-      push_cast
-      field_simp
-    · filter_upwards [ae_restrict_mem measurableSet_Icc] with c hc
-      rw [hF]
-      have hI : 0 ≤ ∫ s in (a + c)..(a + t), h s :=
-        intervalIntegral.integral_nonneg (by linarith [hc.2]) fun s _ ↦ hh0 s
-      have := hh0 (a + c)
-      positivity
-  · rw [Icc_eq_empty_of_lt (lt_of_not_ge ht), Measure.restrict_empty, lintegral_zero_measure,
-      ENNReal.ofReal_zero]
-
-/-- **Arrival counts and the generating functional on the canonical space.** Under i.i.d.
-rate-`r` exponential interarrivals, for a continuous `h ≥ 0`, `a ∈ ℝ` and `t ≥ 0`,
-`E[1{exactly n arrivals in [0, t]} ∏_{j ≤ n} h(a + S_j)] =
-e^{-r t} r^n (∫_a^{a+t} h)^n / n!`; for `t < 0` the event is empty. -/
-private theorem lintegral_gapIntegrand {r : ℝ} (hr : 0 < r) {h : ℝ → ℝ} (hh : Continuous h)
-    (hh0 : ∀ s, 0 ≤ h s) (n : ℕ) : ∀ a t : ℝ, ∫⁻ x, gapIntegrand h n a t x ∂expSeq r =
-      ENNReal.ofReal (if 0 ≤ t then
-        exp (-(r * t)) * r ^ n * (∫ s in a..(a + t), h s) ^ n / n ! else 0) := by
-  have hP := isProbabilityMeasure_expMeasure hr
-  have : ∀ i : ℕ, IsProbabilityMeasure ((fun _ : ℕ ↦ expMeasure r) i) := fun _ ↦ hP
-  induction n with
-  | zero =>
-    intro a t
-    have hfun : gapIntegrand h 0 a t = {x : ℕ → ℝ | 0 ≤ t ∧ t < x 0}.indicator 1 := by
-      funext x
-      simp [gapIntegrand, psum, indicator]
-    have hms : MeasurableSet {x : ℕ → ℝ | 0 ≤ t ∧ t < x 0} :=
-      (MeasurableSet.const _).inter (measurableSet_lt measurable_const (measurable_pi_apply 0))
-    rw [hfun, lintegral_indicator_one hms]
-    split_ifs with ht
-    · have hset : {x : ℕ → ℝ | 0 ≤ t ∧ t < x 0} = (fun x : ℕ → ℝ ↦ x 0) ⁻¹' Ioi t := by
-        ext x; simp [ht]
-      rw [hset, ← Measure.map_apply (measurable_pi_apply 0) measurableSet_Ioi,
-        Measure.infinitePi_map_eval (fun _ : ℕ ↦ expMeasure r) 0, expMeasure_Ioi hr ht]
-      simp
-    · have hset : {x : ℕ → ℝ | 0 ≤ t ∧ t < x 0} = ∅ := by ext x; simp [ht]
-      rw [hset, measure_empty, ENNReal.ofReal_zero]
-  | succ n ih =>
-    intro a t
-    have hm : Measurable fun p : ℝ × (ℕ → ℝ) ↦ gapIntegrand h (n + 1) a t (seqCons p.1 p.2) :=
-      (measurable_gapIntegrand hh.measurable _ _ _).comp measurable_seqCons
-    rw [← map_seqCons_expSeq hr, lintegral_map (measurable_gapIntegrand hh.measurable _ _ _)
-      measurable_seqCons, lintegral_prod _ hm.aemeasurable]
-    simp_rw [gapIntegrand_seqCons]
-    simp_rw [lintegral_const_mul _ (measurable_gapIntegrand hh.measurable _ _ _), ih]
-    exact lintegral_expMeasure_step hr hh hh0 n a t
+private lemma measurable_psum (n : ℕ) : Measurable fun x : ℕ → ℝ ↦ psum x n :=
+  Finset.measurable_sum _ fun i _ ↦ measurable_pi_apply i
 
 /-! ### The seeding model -/
 
@@ -798,20 +431,6 @@ lemma isProbabilityMeasure (h : IsClonalSeeding P lam b d T X) (hlam : 0 < lam) 
 private lemma measurable_seq (h : IsClonalSeeding P lam b d T X) : Measurable fun ω i ↦ T i ω :=
   measurable_pi_iff.2 h.measurable_interarrival
 
-private lemma map_seq (h : IsClonalSeeding P lam b d T X) :
-    P.map (fun ω i ↦ T i ω) = expSeq lam := by
-  rw [h.iIndepFun_interarrival.map_fun_eq_infinitePi_map₀'
-    fun i ↦ (h.hasLaw_interarrival i).aemeasurable]
-  congr 1
-  funext i
-  exact (h.hasLaw_interarrival i).map_eq
-
-private lemma ae_nonneg (h : IsClonalSeeding P lam b d T X) (hlam : 0 < lam) :
-    ∀ᵐ ω ∂P, ∀ i, 0 ≤ T i ω := by
-  have h0 := ae_expSeq_nonneg (NNReal.coe_pos.2 hlam)
-  rw [← h.map_seq] at h0
-  exact ae_of_ae_map h.measurable_seq.aemeasurable h0
-
 private lemma measurable_count (h : IsClonalSeeding P lam b d T X) (t : ℝ≥0) :
     Measurable (count T t) := by
   unfold count
@@ -820,88 +439,6 @@ private lemma measurable_count (h : IsClonalSeeding P lam b d T X) (t : ℝ≥0)
     unfold arrivalTime
     exact Finset.measurable_sum _ fun i _ ↦ h.measurable_interarrival i
   exact measurableSet_setOfPred.1 (measurableSet_le hm measurable_const)
-
-end IsClonalSeeding
-
-private lemma arrivalTime_eq_psum (T : ℕ → Ω → ℝ) (n : ℕ) (ω : Ω) :
-    arrivalTime T n ω = psum (fun i ↦ T i ω) n := rfl
-
-private lemma count_eq_of_gap {T : ℕ → Ω → ℝ} {t : ℝ≥0} {ω : Ω} (hT : ∀ i, 0 ≤ T i ω) {k : ℕ}
-    (hk : arrivalTime T k ω ≤ t ∧ t < arrivalTime T (k + 1) ω) : count T t ω = k := by
-  have hm : Monotone fun n ↦ arrivalTime T n ω := by
-    apply monotone_nat_of_le_succ
-    intro n
-    simp only [arrivalTime, Finset.sum_range_succ]
-    exact le_add_of_nonneg_right (hT n)
-  have heq : {n : ℕ | arrivalTime T (n + 1) ω ≤ t} = Iio k := by
-    ext n
-    simp only [mem_ofPred_eq, mem_Iio]
-    constructor
-    · intro hn
-      by_contra hnk
-      have hle := hm (Nat.add_le_add_right (Nat.le_of_not_gt hnk) 1)
-      linarith [hk.2]
-    · intro hn
-      exact (hm (by omega)).trans hk.1
-  unfold count
-  rw [heq, Set.ncard_Iio_nat]
-
-namespace IsClonalSeeding
-
-variable {lam : ℝ≥0} {b d : ℝ} {T : ℕ → Ω → ℝ} {X : ℝ≥0 → ℕ → Ω → ℕ}
-
-private lemma measure_gap (h : IsClonalSeeding P lam b d T X) (hlam : 0 < lam) (t : ℝ≥0) (n : ℕ) :
-    P {ω | arrivalTime T n ω ≤ t ∧ t < arrivalTime T (n + 1) ω} =
-      ENNReal.ofReal (exp (-(lam * t)) * lam ^ n * t ^ n / n !) := by
-  have hpre : {ω | arrivalTime T n ω ≤ t ∧ t < arrivalTime T (n + 1) ω} =
-      (fun ω i ↦ T i ω) ⁻¹' {x : ℕ → ℝ | psum x n ≤ t ∧ t < psum x (n + 1)} := rfl
-  rw [hpre, ← Measure.map_apply h.measurable_seq (measurableSet_gap n t), h.map_seq]
-  have hg := lintegral_gapIntegrand (NNReal.coe_pos.2 hlam) (h := fun _ ↦ 1) continuous_const
-    (fun _ ↦ zero_le_one) n 0 t
-  simp only [gapIntegrand, ENNReal.ofReal_one, Finset.prod_const_one, zero_add,
-    intervalIntegral.integral_const, smul_eq_mul, mul_one, sub_zero, t.coe_nonneg,
-    ↓reduceIte] at hg
-  rw [← hg, lintegral_indicator (measurableSet_gap n t)]
-  simp
-
-private lemma count_ae_eq_gap (h : IsClonalSeeding P lam b d T X) (hlam : 0 < lam) (t : ℝ≥0)
-    (n : ℕ) : {ω | arrivalTime T n ω ≤ t ∧ t < arrivalTime T (n + 1) ω} =ᵐ[P]
-      {ω | count T t ω = n} := by
-  have := h.isProbabilityMeasure hlam
-  refine ae_eq_of_ae_subset_of_measure_ge ?_ ?_ ?_ (measure_ne_top _ _)
-  · filter_upwards [h.ae_nonneg hlam] with ω hω hgap
-    exact count_eq_of_gap hω hgap
-  · rw [measure_gap h hlam, (hasLaw_count hlam h.hasLaw_interarrival
-      h.iIndepFun_interarrival t).measure_eq (measurableSet_singleton n),
-      show ({x : ℕ | x = n} : Set ℕ) = {n} from rfl, poissonMeasure_singleton]
-    apply le_of_eq
-    congr 1
-    push_cast
-    ring
-  · have hpre : {ω | arrivalTime T n ω ≤ t ∧ t < arrivalTime T (n + 1) ω} =
-        (fun ω i ↦ T i ω) ⁻¹' {x : ℕ → ℝ | psum x n ≤ t ∧ t < psum x (n + 1)} := rfl
-    rw [hpre]
-    exact (h.measurable_seq (measurableSet_gap n t)).nullMeasurableSet
-
-/-- The generating functional of the arrivals: for continuous `g ≥ 0`,
-`E[1{N(t) = n} ∏_{j ≤ n} g(S_j)] = e^{-lam t} lam^n (∫_0^t g)^n / n!`. -/
-private theorem setLIntegral_count (h : IsClonalSeeding P lam b d T X) (hlam : 0 < lam) {g : ℝ → ℝ}
-    (hg : Continuous g) (hg0 : ∀ s, 0 ≤ g s) (t : ℝ≥0) (n : ℕ) :
-    ∫⁻ ω in {ω | count T t ω = n}, ∏ j : Fin n, ENNReal.ofReal (g (arrivalTime T (j + 1) ω)) ∂P =
-      ENNReal.ofReal (exp (-(lam * t)) * lam ^ n * (∫ s in (0 : ℝ)..t, g s) ^ n / n !) := by
-  rw [← Measure.restrict_congr_set (h.count_ae_eq_gap hlam t n)]
-  have hpre : {ω | arrivalTime T n ω ≤ t ∧ t < arrivalTime T (n + 1) ω} =
-      (fun ω i ↦ T i ω) ⁻¹' {x : ℕ → ℝ | psum x n ≤ t ∧ t < psum x (n + 1)} := rfl
-  have hF : Measurable fun x : ℕ → ℝ ↦ ∏ j : Fin n, ENNReal.ofReal (g (psum x (j + 1))) :=
-    Finset.measurable_prod _ fun j _ ↦
-      ENNReal.measurable_ofReal.comp (hg.measurable.comp (measurable_psum _))
-  rw [hpre, ← lintegral_indicator (h.measurable_seq (measurableSet_gap n t))]
-  change ∫⁻ ω, ({x : ℕ → ℝ | psum x n ≤ t ∧ t < psum x (n + 1)}.indicator
-    (fun x ↦ ∏ j : Fin n, ENNReal.ofReal (g (psum x (j + 1))))) (fun i ↦ T i ω) ∂P = _
-  rw [← lintegral_map (hF.indicator (measurableSet_gap n t)) h.measurable_seq, h.map_seq]
-  have := lintegral_gapIntegrand (NNReal.coe_pos.2 hlam) hg hg0 n 0 t
-  simp only [gapIntegrand, zero_add, t.coe_nonneg, ↓reduceIte] at this
-  exact this
 
 /-- **The generating function of the clone size.** For `0 ≤ z ≤ 1`,
 `E z^{y(t)} = exp(-lam t + lam ∫_0^t G_{t-s}(z) ds)`, where `G_u` is the generating function of
@@ -919,7 +456,8 @@ private theorem lintegral_ofReal_pow_cloneSize (h : IsClonalSeeding P lam b d T 
   have hn : ∀ n : ℕ, ∫⁻ ω in {ω | count T t ω = n}, ENNReal.ofReal (z ^ cloneSize T X t ω) ∂P =
       ENNReal.ofReal (exp (-(lam * t)) * lam ^ n * I ^ n / n !) := by
     intro n
-    rw [← h.setLIntegral_count hlam hgc hg0 t n]
+    rw [← setLIntegral_prod_arrivalTime hlam h.hasLaw_interarrival h.iIndepFun_interarrival hgc
+      hg0 t n]
     set S := {ω | count T t ω = n} with hS_def
     have hS : MeasurableSet S := h.measurable_count t (measurableSet_singleton n)
     set V : Ω → (Fin n → ℕ) := fun ω j ↦ X t j ω with hV_def
@@ -956,16 +494,10 @@ private theorem lintegral_ofReal_pow_cloneSize (h : IsClonalSeeding P lam b d T 
     simp_rw [← lintegral_const_mul _ (hmeas _)]
     rw [← lintegral_tsum fun m ↦ ((hmeas m).const_mul _).aemeasurable]
     refine setLIntegral_congr_fun_ae hS ?_
-    filter_upwards [Filter.EventuallyEqSet.mem_iff (h.count_ae_eq_gap hlam t n),
-      h.ae_nonneg hlam] with ω hgap hnn hω
-    have hgap' := hgap.2 hω
-    have hage : ∀ j : Fin n, 0 ≤ (t : ℝ) - arrivalTime T (j + 1) ω := by
-      intro j
-      have hmono : arrivalTime T (j + 1) ω ≤ arrivalTime T n ω := by
-        simp only [arrivalTime]
-        exact Finset.sum_le_sum_of_subset_of_nonneg (Finset.range_subset_range.2 (by omega))
-          fun i _ _ ↦ hnn i
-      linarith [hgap'.1]
+    filter_upwards [ae_interarrival_pos hlam h.hasLaw_interarrival] with ω hpos hω
+    have hω' : count T t ω = n := hω
+    have hage : ∀ j : Fin n, 0 ≤ (t : ℝ) - arrivalTime T (j + 1) ω := fun j ↦
+      sub_nonneg.2 (arrivalTime_le_of_lt_count (fun i ↦ (hpos i).le) (by rw [hω']; exact j.2))
     calc ∑' m : Fin n → ℕ, ENNReal.ofReal (z ^ ∑ j, m j) * ∏ j : Fin n,
           ENNReal.ofReal (LinearBirthDeath.prob b d (t - arrivalTime T (j + 1) ω) (m j))
         = ∑' m : Fin n → ℕ, ∏ j : Fin n, ENNReal.ofReal
@@ -981,7 +513,7 @@ private theorem lintegral_ofReal_pow_cloneSize (h : IsClonalSeeding P lam b d T 
             (LinearBirthDeath.prob b d (t - arrivalTime T (j + 1) ω) k * z ^ k)
       _ = ∏ j : Fin n, ENNReal.ofReal (g (arrivalTime T (j + 1) ω)) := by
           refine Finset.prod_congr rfl fun j _ ↦ ?_
-          have hs := hasSum_prob_mul_pow hd hdb (hage j) hz0 hz1
+          have hs := hasSum_prob_mul_pow_lineagePGF hd hdb (hage j) hz0 hz1
           rw [← ENNReal.ofReal_tsum_of_nonneg (fun k ↦ mul_nonneg
             (LinearBirthDeath.prob_nonneg hb.le hd (hage j) k) (pow_nonneg hz0 k)) hs.summable,
             hs.tsum_eq, hg_def]
@@ -1007,23 +539,33 @@ private theorem lintegral_ofReal_pow_cloneSize (h : IsClonalSeeding P lam b d T 
     ring
   rw [← ENNReal.ofReal_tsum_of_nonneg hnn hsum.summable, hsum.tsum_eq]
 
-/-- **The generating function of the clone size.** For `0 ≤ d < b`, `t ≥ 0` and `0 ≤ z ≤ 1`,
-`E z^{y(t)} = (q / (1 - (1 - q) z))^{lam / b}` with `q = successProb b d t`: the generating
-function of the negative binomial law with shape `lam / b` and success probability `q`
-(Kendall 1948, for the birth–death–immigration process). -/
-theorem lintegral_pow_cloneSize (h : IsClonalSeeding P lam b d T X) (hlam : 0 < lam)
-    (hd : 0 ≤ d) (hdb : d < b) {z : ℝ} (hz0 : 0 ≤ z) (hz1 : z ≤ 1) (t : ℝ≥0) :
-    ∫⁻ ω, ENNReal.ofReal (z ^ cloneSize T X t ω) ∂P = ENNReal.ofReal
-      ((successProb b d t / (1 - (1 - successProb b d t) * z)) ^ ((lam : ℝ) / b)) := by
-  rw [h.lintegral_ofReal_pow_cloneSize hlam hd hdb hz0 hz1 t,
-    exp_mul_exp_integral_lineagePGF (lam : ℝ) hdb (by linarith) hz1 t.coe_nonneg]
-
 lemma measurable_cloneSize (h : IsClonalSeeding P lam b d T X) (t : ℝ≥0) :
     Measurable (cloneSize T X t) := by
   have hf : Measurable fun p : ℕ × Ω ↦ ∑ j ∈ Finset.range p.1, X t j p.2 :=
     measurable_from_prod_countable_right fun n ↦
       (Finset.measurable_sum (Finset.range n) fun j _ ↦ h.measurable_lineage t j :)
   exact hf.comp ((h.measurable_count t).prodMk measurable_id)
+
+/-- **The generating function of the clone size.** For `0 ≤ d < b`, `t ≥ 0` and `0 ≤ z ≤ 1`,
+`E z^{y(t)} = (q / (1 - (1 - q) z))^{lam / b}` with `q = successProb b d t`: the generating
+function of the negative binomial law with shape `lam / b` and success probability `q`
+(`hasSum_negBinomialPMF_mul_pow`; Kendall 1948, for the birth–death–immigration process). -/
+theorem pgf_cloneSize (h : IsClonalSeeding P lam b d T X) (hlam : 0 < lam) (hd : 0 ≤ d)
+    (hdb : d < b) {z : ℝ} (hz0 : 0 ≤ z) (hz1 : z ≤ 1) (t : ℝ≥0) :
+    pgf (cloneSize T X t) P z =
+      (successProb b d t / (1 - (1 - successProb b d t) * z)) ^ ((lam : ℝ) / b) := by
+  have hb : 0 < b := by linarith
+  have hq := successProb_pos hdb hb t.coe_nonneg
+  have hq1 := successProb_le_one hdb hb t.coe_nonneg
+  have h0 : 0 ≤ᵐ[P] fun ω ↦ z ^ cloneSize T X t ω := ae_of_all _ fun ω ↦ pow_nonneg hz0 _
+  have hm : AEStronglyMeasurable (fun ω ↦ z ^ cloneSize T X t ω) P :=
+    ((measurable_of_countable fun k : ℕ ↦ z ^ k).comp
+      (h.measurable_cloneSize t)).aestronglyMeasurable
+  have hden : 0 < 1 - (1 - successProb b d t) * z := by nlinarith
+  rw [pgf, integral_eq_lintegral_of_nonneg_ae h0 hm,
+    h.lintegral_ofReal_pow_cloneSize hlam hd hdb hz0 hz1 t,
+    exp_mul_exp_integral_lineagePGF (lam : ℝ) hdb hb hz1 t.coe_nonneg,
+    ENNReal.toReal_ofReal (Real.rpow_nonneg (div_nonneg hq.le hden.le) _)]
 
 /-- **The clone size is negative binomial** (Heyde, Reiter, Naxerova & Nowak 2019, Eq. [2]):
 for `0 ≤ d < b` and `t ≥ 0`, `P(y(t) = m) = NB(m; lam / b, q(t))` with
@@ -1051,60 +593,57 @@ theorem measureReal_cloneSize (h : IsClonalSeeding P lam b d T X) (hlam : 0 < la
     exact le_hasSum (hasSum_negBinomialPMF hk hq hq1) m fun j _ ↦ hnb0 j
   · intro z hz
     have hz0 := hz.1.le
-    have hz1 := hz.2.le
-    have hpgf := h.lintegral_ofReal_pow_cloneSize hlam hd hdb hz0 hz1 t
-    rw [exp_mul_exp_integral_lineagePGF (lam : ℝ) hdb hb hz1 t.coe_nonneg,
-      lintegral_comp_nat hY (fun m ↦ ENNReal.ofReal (z ^ m))] at hpgf
-    have hnbsum := hasSum_negBinomialPMF_mul_pow hk hq hq1 hz0 hz1
-    have hsp : Summable fun m ↦ p m * z ^ m := by
-      refine Summable.of_norm_bounded (g := fun m ↦ z ^ m)
-        (summable_geometric_of_lt_one hz0 hz.2) fun m ↦ ?_
-      rw [norm_mul, norm_pow, Real.norm_of_nonneg hz0, Real.norm_of_nonneg (hp0 m)]
-      exact mul_le_of_le_one_left (pow_nonneg hz0 m) measureReal_le_one
-    have hl : ∑' m, ENNReal.ofReal (z ^ m) * P {ω | cloneSize T X t ω = m} =
-        ENNReal.ofReal (∑' m, p m * z ^ m) := by
-      rw [ENNReal.ofReal_tsum_of_nonneg (fun m ↦ mul_nonneg (hp0 m) (pow_nonneg hz0 m)) hsp]
-      refine tsum_congr fun m ↦ ?_
-      rw [ENNReal.ofReal_mul (hp0 m), mul_comm, hp, ofReal_measureReal (measure_ne_top _ _)]
-    rw [hl, ← hnbsum.tsum_eq] at hpgf
-    exact (ENNReal.ofReal_eq_ofReal_iff
-      (tsum_nonneg fun m ↦ mul_nonneg (hp0 m) (pow_nonneg hz0 m))
-      (tsum_nonneg fun m ↦ mul_nonneg (hnb0 m) (pow_nonneg hz0 m))).1 hpgf
+    have hzabs : |z| ≤ 1 := by rw [abs_of_nonneg hz0]; exact hz.2.le
+    have hpgf := h.pgf_cloneSize hlam hd hdb hz0 hz.2.le t
+    rw [pgf_eq_tsum _ P hY hzabs,
+      ← (hasSum_negBinomialPMF_mul_pow (r := (lam : ℝ) / b) hq hq1 hzabs).tsum_eq] at hpgf
+    calc ∑' m, p m * z ^ m = ∑' m, z ^ m * P.real {ω | cloneSize T X t ω = m} :=
+          tsum_congr fun m ↦ mul_comm _ _
+      _ = ∑' m, nb m * z ^ m := hpgf
 
-/-- **The mean clone size** (Heyde, Reiter, Naxerova & Nowak 2019, Eq. [1]): for `0 ≤ d < b`
-and `t ≥ 0`, `y(t)` is integrable with `E y(t) = (k / ρ) (e^{(b-d) t} - 1)`, `k = lam / b`,
-`ρ = 1 - d / b`. -/
-theorem integral_cloneSize (h : IsClonalSeeding P lam b d T X) (hlam : 0 < lam) (hd : 0 ≤ d)
-    (hdb : d < b) (t : ℝ≥0) :
-    Integrable (fun ω ↦ (cloneSize T X t ω : ℝ)) P ∧
-      ∫ ω, (cloneSize T X t ω : ℝ) ∂P = meanSize lam b d t := by
-  have hP := h.isProbabilityMeasure hlam
+private lemma meanSize_nonneg {lam b d t : ℝ} (hlam : 0 ≤ lam) (hdb : d < b) (hb : 0 < b)
+    (ht : 0 ≤ t) : 0 ≤ meanSize lam b d t := by
+  rw [meanSize_eq hb]
+  have : 1 ≤ exp ((b - d) * t) := one_le_exp (mul_nonneg (by linarith) ht)
+  have : 0 ≤ lam / (b - d) := div_nonneg hlam (by linarith)
+  nlinarith
+
+/-- `E y(t) = ȳ(t)`, as a lower Lebesgue integral. -/
+private theorem lintegral_ofReal_cloneSize (h : IsClonalSeeding P lam b d T X) (hlam : 0 < lam)
+    (hd : 0 ≤ d) (hdb : d < b) (t : ℝ≥0) :
+    ∫⁻ ω, ENNReal.ofReal (cloneSize T X t ω) ∂P = ENNReal.ofReal (meanSize lam b d t) := by
+  have := h.isProbabilityMeasure hlam
   have hb : 0 < b := by linarith
   have hk : 0 < (lam : ℝ) / b := div_pos (NNReal.coe_pos.2 hlam) hb
-  have hY := h.measurable_cloneSize t
-  have hμ : 0 ≤ meanSize lam b d t := by
-    rw [meanSize_eq hb]
-    have : 1 ≤ exp ((b - d) * t) := one_le_exp (mul_nonneg (by linarith) t.coe_nonneg)
-    have : 0 ≤ (lam : ℝ) / (b - d) := div_nonneg lam.coe_nonneg (by linarith)
-    nlinarith
+  have hμ := meanSize_nonneg lam.coe_nonneg hdb hb t.coe_nonneg
   have hlaw : ∀ m, P.real {ω | cloneSize T X t ω = m} =
       negBinomialReal (lam / b) (meanSize lam b d t) m := fun m ↦ by
     rw [h.measureReal_cloneSize hlam hd hdb t m, negBinomialReal_eq_negBinomialPMF hk hμ,
       successProb_eq_div hdb hb (NNReal.coe_pos.2 hlam) t.coe_nonneg, add_comm]
   have hsum := hasSum_mul_negBinomialReal hk hμ
-  have hlin : ∫⁻ ω, ENNReal.ofReal (cloneSize T X t ω) ∂P =
-      ENNReal.ofReal (meanSize lam b d t) := by
-    rw [lintegral_comp_nat hY (fun m ↦ ENNReal.ofReal m), ← hsum.tsum_eq,
-      ENNReal.ofReal_tsum_of_nonneg (fun m ↦ mul_nonneg (Nat.cast_nonneg m)
-        (negBinomialReal_nonneg hk hμ m)) hsum.summable]
-    refine tsum_congr fun m ↦ ?_
-    rw [← hlaw m, ENNReal.ofReal_mul (Nat.cast_nonneg m), ofReal_measureReal (measure_ne_top _ _)]
-  have hm : AEStronglyMeasurable (fun ω ↦ (cloneSize T X t ω : ℝ)) P :=
-    (measurable_of_countable (fun m : ℕ ↦ (m : ℝ))).comp hY |>.aestronglyMeasurable
+  rw [lintegral_comp_nat (h.measurable_cloneSize t) (fun m ↦ ENNReal.ofReal m), ← hsum.tsum_eq,
+    ENNReal.ofReal_tsum_of_nonneg (fun m ↦ mul_nonneg (Nat.cast_nonneg m)
+      (negBinomialReal_nonneg hk hμ m)) hsum.summable]
+  refine tsum_congr fun m ↦ ?_
+  rw [← hlaw m, ENNReal.ofReal_mul (Nat.cast_nonneg m), ofReal_measureReal (measure_ne_top _ _)]
+
+/-- For `0 ≤ d < b` and `t ≥ 0` the clone size `y(t)` is integrable. -/
+theorem integrable_cloneSize (h : IsClonalSeeding P lam b d T X) (hlam : 0 < lam) (hd : 0 ≤ d)
+    (hdb : d < b) (t : ℝ≥0) : Integrable (fun ω ↦ (cloneSize T X t ω : ℝ)) P := by
   have h0 : 0 ≤ᵐ[P] fun ω ↦ (cloneSize T X t ω : ℝ) := ae_of_all _ fun ω ↦ Nat.cast_nonneg _
-  refine ⟨⟨hm, (hasFiniteIntegral_iff_ofReal h0).2 (by rw [hlin]; exact ENNReal.ofReal_lt_top)⟩,
-    ?_⟩
-  rw [integral_eq_lintegral_of_nonneg_ae h0 hm, hlin, ENNReal.toReal_ofReal hμ]
+  refine ⟨((measurable_of_countable (fun m : ℕ ↦ (m : ℝ))).comp
+    (h.measurable_cloneSize t)).aestronglyMeasurable, (hasFiniteIntegral_iff_ofReal h0).2 ?_⟩
+  rw [h.lintegral_ofReal_cloneSize hlam hd hdb t]
+  exact ENNReal.ofReal_lt_top
+
+/-- **The mean clone size** (Heyde, Reiter, Naxerova & Nowak 2019, Eq. [1]): for `0 ≤ d < b`
+and `t ≥ 0`, `E y(t) = (k / ρ) (e^{(b-d) t} - 1)`, `k = lam / b`, `ρ = 1 - d / b`. -/
+theorem integral_cloneSize (h : IsClonalSeeding P lam b d T X) (hlam : 0 < lam) (hd : 0 ≤ d)
+    (hdb : d < b) (t : ℝ≥0) : ∫ ω, (cloneSize T X t ω : ℝ) ∂P = meanSize lam b d t := by
+  have h0 : 0 ≤ᵐ[P] fun ω ↦ (cloneSize T X t ω : ℝ) := ae_of_all _ fun ω ↦ Nat.cast_nonneg _
+  rw [integral_eq_lintegral_of_nonneg_ae h0 (h.integrable_cloneSize hlam hd hdb t).1,
+    h.lintegral_ofReal_cloneSize hlam hd hdb t,
+    ENNReal.toReal_ofReal (meanSize_nonneg lam.coe_nonneg hdb (by linarith) t.coe_nonneg)]
 
 end IsClonalSeeding
 
@@ -1172,7 +711,8 @@ theorem negBinomial_cloneSizes {ι : Type*} {lam : ι → ℝ≥0} {b d : ℝ} {
       iIndepFun (fun i ↦ cloneSize (T i) (X i) t) P := by
   have hb : 0 < b := by linarith
   refine ⟨fun i ↦ ⟨meanSize_zero _ _ _, hasDerivAt_meanSize hdb hb⟩, fun t ↦
-    ⟨fun i ↦ (h i).integral_cloneSize (hlam i) hd.le hdb t,
+    ⟨fun i ↦ ⟨(h i).integrable_cloneSize (hlam i) hd.le hdb t,
+      (h i).integral_cloneSize (hlam i) hd.le hdb t⟩,
       fun i m ↦ (h i).measureReal_cloneSize (hlam i) hd.le hdb t m,
       fun i ↦ successProb_eq_div hdb hb (NNReal.coe_pos.2 (hlam i)) t.coe_nonneg,
       iIndepFun_cloneSize hind t⟩⟩
@@ -1319,29 +859,11 @@ private lemma unifIoo_kendallQuantile {b d a : ℝ} (hb : 0 ≤ b) (hd : 0 ≤ d
           · linarith [hv.1]
           · linarith [hv.2]
 
-/-- Before the `n`-th arrival in `[0, t]` the arrival times are at most `t`. -/
-private lemma psum_le_of_count_eq {x : ℕ → ℝ} (hx : ∀ i, 0 ≤ x i) {t : ℝ≥0} {n : ℕ}
-    (hn : count (fun i (x : ℕ → ℝ) ↦ x i) t x = n) {j : ℕ} (hj : j < n) :
-    psum x (j + 1) ≤ t := by
-  by_contra hgt
-  replace hgt := lt_of_not_ge hgt
-  have hsub : {k : ℕ | arrivalTime (fun i (x : ℕ → ℝ) ↦ x i) (k + 1) x ≤ t} ⊆ Iio j := by
-    intro k hk
-    by_contra hkj
-    simp only [mem_Iio, not_lt] at hkj
-    have hmono : psum x (j + 1) ≤ psum x (k + 1) :=
-      Finset.sum_le_sum_of_subset_of_nonneg (Finset.range_subset_range.2 (by omega))
-        fun i _ _ ↦ hx i
-    exact absurd (lt_of_lt_of_le hgt hmono) (not_lt.2 hk)
-  have := Set.ncard_le_ncard hsub (Set.finite_Iio j)
-  rw [Set.ncard_Iio_nat] at this
-  unfold count at hn
-  omega
-
 /-- A concrete probability space for the seeding model: i.i.d. exponential interarrival times
 and i.i.d. uniform seeds on `(0, 1)`. -/
 private noncomputable def seedingMeasure (lam : ℝ≥0) : Measure ((ℕ → ℝ) × (ℕ → ℝ)) :=
-  (expSeq lam).prod (Measure.infinitePi fun _ : ℕ ↦ unifIoo)
+  (Measure.infinitePi fun _ : ℕ ↦ expMeasure (lam : ℝ)).prod
+    (Measure.infinitePi fun _ : ℕ ↦ unifIoo)
 
 /-- **The seeding model exists.** On `seedingMeasure lam`, with the `i`-th interarrival time the
 `i`-th coordinate of the first sequence and the size at time `t` of the lineage founded by the
@@ -1356,7 +878,8 @@ private theorem isClonalSeeding_seedingMeasure {lam : ℝ≥0} (hlam : 0 < lam) 
   have hU : ∀ i : ℕ, IsProbabilityMeasure ((fun _ : ℕ ↦ unifIoo) i) := fun _ ↦ inferInstance
   have hE : ∀ i : ℕ, IsProbabilityMeasure ((fun _ : ℕ ↦ expMeasure (lam : ℝ)) i) :=
     fun _ ↦ inferInstance
-  have hfst : (seedingMeasure lam).map Prod.fst = expSeq lam := by
+  have hfst : (seedingMeasure lam).map Prod.fst =
+      Measure.infinitePi fun _ : ℕ ↦ expMeasure (lam : ℝ) := by
     rw [seedingMeasure, Measure.map_fst_prod, measure_univ, one_smul]
   have hlaw : ∀ i, (seedingMeasure lam).map (fun ω ↦ ω.1 i) = expMeasure lam := by
     intro i
@@ -1386,7 +909,7 @@ private theorem isClonalSeeding_seedingMeasure {lam : ℝ≥0} (hlam : 0 < lam) 
     exact hfst
   refine ⟨hTm, hTlaw, hind, hQ, ?_⟩
   · intro t n A hA m
-    set μ := expSeq lam
+    set μ := Measure.infinitePi fun _ : ℕ ↦ expMeasure (lam : ℝ)
     set ν := Measure.infinitePi fun _ : ℕ ↦ unifIoo
     set B : Set (ℕ → ℝ) := A ∩ {x | count (fun i (x : ℕ → ℝ) ↦ x i) t x = n} with hB
     have hBm : MeasurableSet B := hA.inter (measurable_count_seq t (measurableSet_singleton n))
@@ -1446,12 +969,15 @@ private theorem isClonalSeeding_seedingMeasure {lam : ℝ≥0} (hlam : 0 < lam) 
       rw [← lintegral_map (hF.indicator hBm) measurable_fst, hfst]
     refine Eq.trans ?_ hrhs.symm
     refine lintegral_congr_ae ?_
-    filter_upwards [ae_expSeq_nonneg hr] with x hx
+    filter_upwards [ae_interarrival_pos hlam (T := fun i (y : ℕ → ℝ) ↦ y i) (P := μ)
+      fun i ↦ (measurePreserving_eval_infinitePi (fun _ : ℕ ↦ expMeasure (lam : ℝ)) i).hasLaw]
+      with x hx
     by_cases hxB : x ∈ B
     · rw [indicator_of_mem hxB, indicator_of_mem hxB]
       have hcount : count (fun i (x : ℕ → ℝ) ↦ x i) t x = n := hxB.2
       have hage : ∀ j : Fin n, 0 ≤ (t : ℝ) - psum x (j + 1) := fun j ↦
-        sub_nonneg.2 (psum_le_of_count_eq hx hcount j.2)
+        sub_nonneg.2 (arrivalTime_le_of_lt_count (T := fun i (y : ℕ → ℝ) ↦ y i)
+          (fun i ↦ (hx i).le) (by rw [hcount]; exact j.2))
       have hpi : cyl x = Set.pi (Finset.range n : Set ℕ) fun k ↦
           if h : k < n then {v | kendallQuantile b d (t - psum x (k + 1)) v = m ⟨k, h⟩}
           else univ := by

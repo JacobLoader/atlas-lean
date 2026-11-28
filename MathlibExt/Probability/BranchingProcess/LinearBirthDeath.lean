@@ -30,7 +30,8 @@ Multiplying numerator and denominator by `exp (-(b - d) t)` gives the equivalent
 `α t = d (1 - exp (-(b - d) t)) / (b - d exp (-(b - d) t))`.
 
 This file defines these probabilities and proves that they are the solution of the Kolmogorov
-equations of the process, together with the mean and the extinction probability.
+equations of the process, together with the mean, the generating function and the extinction
+probability.
 
 ## Main definitions
 
@@ -45,6 +46,9 @@ equations of the process, together with the mean and the extinction probability.
   `p_n' = b (n - 1) p_(n-1) - (b + d) n p_n + d (n + 1) p_(n+1)`.
 * `prob_nonneg`, `hasSum_prob`: it is a probability distribution on `ℕ` for every `t ≥ 0`.
 * `hasSum_mul_prob`: the mean is `E[X t] = exp ((b - d) t)`.
+* `hasSum_prob_mul_pow`, `hasSum_prob_mul_pow_of_ne`: the generating function
+  `∑_n P(X t = n) z^n`, in closed form `1 - (b - d) E (1 - z) / (b (1 - z) E + b z - d)` for
+  `b ≠ d`.
 * `hasDerivAt_extinctionProb`, `eq_extinctionProb_of_hasDerivWithinAt`: `α` solves the backward
   equation `q' = d - (b + d) q + b q²`, `q 0 = 0`, and is its only solution with values in
   `[0, 1]`.
@@ -249,6 +253,70 @@ theorem hasSum_mul_prob {b d t : ℝ} (hb : 0 ≤ b) (hd : 0 ≤ d) (ht : 0 ≤ 
   · simp [prob]
     field_simp
     ring
+
+/-- **The generating function of Kendall's law** (Kendall 1948). For `0 ≤ b`, `0 ≤ d`, `t ≥ 0`
+and `|z| ≤ 1`, `∑_n P(X t = n) z^n = α t + (1 - α t) (1 - β t) z / (1 - β t z)`. -/
+theorem hasSum_prob_mul_pow {b d t z : ℝ} (hb : 0 ≤ b) (hd : 0 ≤ d) (ht : 0 ≤ t)
+    (hz : |z| ≤ 1) :
+    HasSum (fun n : ℕ ↦ prob b d t n * z ^ n)
+      (extinctionProb b d t + (1 - extinctionProb b d t) * (1 - geomRatio b d t) * z /
+        (1 - geomRatio b d t * z)) := by
+  have h1 := one_sub_geomRatio_pos hb hd ht
+  have h0 := geomRatio_nonneg (d := d) hb ht
+  have hn : ‖geomRatio b d t * z‖ < 1 := by
+    rw [norm_mul, Real.norm_of_nonneg h0, Real.norm_eq_abs]
+    calc geomRatio b d t * |z| ≤ geomRatio b d t * 1 := mul_le_mul_of_nonneg_left hz h0
+      _ < 1 := by linarith
+  have hg := (hasSum_geometric_of_norm_lt_one hn).mul_left
+    ((1 - extinctionProb b d t) * (1 - geomRatio b d t) * z)
+  refine (hasSum_nat_add_iff' 1).1 ?_
+  convert hg using 1
+  · funext n
+    simp only [prob]
+    ring
+  · simp only [Finset.sum_range_one, prob, pow_zero, mul_one]
+    ring
+
+/-- **Kendall's generating function in closed form.** For `b ≠ d` (`0 ≤ b`, `0 ≤ d`), `t ≥ 0`
+and `0 ≤ z ≤ 1`, with `E = exp ((b - d) t)`,
+`∑_n P(X t = n) z^n = 1 - (b - d) E (1 - z) / (b (1 - z) E + b z - d)`. -/
+theorem hasSum_prob_mul_pow_of_ne {b d t z : ℝ} (hb : 0 ≤ b) (hd : 0 ≤ d) (ht : 0 ≤ t)
+    (hbd : b ≠ d) (hz0 : 0 ≤ z) (hz1 : z ≤ 1) :
+    HasSum (fun n : ℕ ↦ prob b d t n * z ^ n)
+      (1 - (b - d) * exp ((b - d) * t) * (1 - z) /
+        (b * (1 - z) * exp ((b - d) * t) + b * z - d)) := by
+  convert hasSum_prob_mul_pow hb hd ht (abs_le.2 ⟨by linarith, hz1⟩) using 1
+  have hden := denom_ne hb ht hbd
+  have hα :
+      extinctionProb b d t = d * (exp ((b - d) * t) - 1) / (b * exp ((b - d) * t) - d) := by
+    simp [extinctionProb, hbd]
+  have hβ : geomRatio b d t = b * (exp ((b - d) * t) - 1) / (b * exp ((b - d) * t) - d) := by
+    simp [geomRatio, hbd]
+  rw [hα, hβ]
+  have hz : 0 ≤ b * (1 - z) := mul_nonneg hb (by linarith)
+  have hD : b * (1 - z) * exp ((b - d) * t) + b * z - d ≠ 0 := by
+    rcases lt_or_gt_of_ne hbd with h | h
+    · have hE : exp ((b - d) * t) ≤ 1 :=
+        exp_le_one_iff.2 (mul_nonpos_of_nonpos_of_nonneg (by linarith) ht)
+      have := mul_le_mul_of_nonneg_left hE hz
+      exact (by linarith : b * (1 - z) * exp ((b - d) * t) + b * z - d < 0).ne
+    · have hE : 1 ≤ exp ((b - d) * t) := one_le_exp (mul_nonneg (by linarith) ht)
+      have := mul_le_mul_of_nonneg_left hE hz
+      exact (by linarith : 0 < b * (1 - z) * exp ((b - d) * t) + b * z - d).ne'
+  generalize exp ((b - d) * t) = E at *
+  have e1 : 1 - d * (E - 1) / (b * E - d) = (b - d) * E / (b * E - d) := by
+    rw [one_sub_div hden]; congr 1; ring
+  have e2 : 1 - b * (E - 1) / (b * E - d) = (b - d) / (b * E - d) := by
+    rw [one_sub_div hden]; congr 1; ring
+  have e3 : 1 - b * (E - 1) / (b * E - d) * z = (b * (1 - z) * E + b * z - d) / (b * E - d) := by
+    rw [div_mul_eq_mul_div, one_sub_div hden]; congr 1; ring
+  rw [e1, e2, e3]
+  clear e1 e2 e3 hα hβ
+  generalize hC : b * E - d = C at *
+  generalize hDD : b * (1 - z) * E + b * z - d = D at *
+  field_simp
+  subst hC hDD
+  ring
 
 /-- `b α t = d β t`. -/
 private lemma mul_extinctionProb (b d t : ℝ) : b * extinctionProb b d t = d * geomRatio b d t := by

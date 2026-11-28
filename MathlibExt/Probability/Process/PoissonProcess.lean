@@ -55,6 +55,8 @@ rate `r`: the `n`-th arrival happens at `S n = T 0 + ⋯ + T (n - 1)` and `N t =
   `r₁` and `r₂` is a Poisson process of rate `r₁ + r₂`.
 * `IsPoissonProcess.thinning`: keeping each point independently with probability `p` turns a
   Poisson process of rate `r` into a Poisson process of rate `p r`.
+* `PoissonProcess.setLIntegral_prod_arrivalTime`: the generating functional of the arrival times,
+  `E[1{N t = n} ∏_{j ≤ n} g (S j)] = e^{-r t} r^n (∫_0^t g)^n / n!` for continuous `g ≥ 0`.
 
 ## Implementation notes
 
@@ -416,7 +418,8 @@ private theorem expMeasure_Iic {r : ℝ} (hr : 0 < r) (x : ℝ) :
   have := isProbabilityMeasure_expMeasure hr
   rw [← ofReal_cdf, cdf_expMeasure_eq hr]
 
-private theorem ae_interarrival_pos {T : ℕ → Ω → ℝ} {r : ℝ≥0} (hr : 0 < r)
+/-- I.i.d. exponential interarrival times of positive rate are all positive almost surely. -/
+theorem ae_interarrival_pos {T : ℕ → Ω → ℝ} {r : ℝ≥0} (hr : 0 < r)
     (hT : ∀ i, HasLaw (T i) (expMeasure r) P) :
     ∀ᵐ ω ∂P, ∀ i, 0 < T i ω := by
   rw [ae_all_iff]
@@ -1508,6 +1511,285 @@ theorem isPoissonProcess_count {T : ℕ → Ω → ℝ} {r : ℝ≥0} (hr : 0 < 
       (fun (i : Fin 1) ↦ poissonMeasure (r * (ts i.succ - ts i.castSucc)))
       (0 : Fin 1)).fun_comp_hasLaw hl
     simpa [ts] using hl0
+
+
+/-! ### The generating functional of the arrival times
+
+Integrating out the interarrival times one at a time, as above, gives for continuous `g ≥ 0` the
+expectation of `∏_{j ≤ n} g(S_j)` on the event that exactly `n` arrivals fall in `[0, t]`. -/
+
+/-- The partial sum `x 0 + ⋯ + x (n - 1)`: the `n`-th arrival time of the interarrival
+sequence `x`. -/
+private def partialSum (x : ℕ → ℝ) (n : ℕ) : ℝ := ∑ i ∈ Finset.range n, x i
+
+private lemma partialSum_seqCons_succ (a : ℝ) (y : ℕ → ℝ) (n : ℕ) :
+    partialSum (seqCons a y) (n + 1) = a + partialSum y n := by
+  unfold partialSum
+  rw [sum_range_succ_tail]
+  rfl
+
+private lemma measurable_partialSum (n : ℕ) : Measurable fun x : ℕ → ℝ ↦ partialSum x n :=
+  Finset.measurable_sum _ fun i _ ↦ measurable_pi_apply i
+
+private lemma integral_eq_sub_primitive {h : ℝ → ℝ} (hh : Continuous h) (x y : ℝ) :
+    ∫ s in x..y, h s = (∫ s in (0 : ℝ)..y, h s) - ∫ s in (0 : ℝ)..x, h s :=
+  (intervalIntegral.integral_interval_sub_left (hh.intervalIntegrable (μ := volume) 0 y)
+    (hh.intervalIntegrable 0 x)).symm
+
+private lemma continuous_primitive {h : ℝ → ℝ} (hh : Continuous h) :
+    Continuous fun x : ℝ ↦ ∫ s in (0 : ℝ)..x, h s :=
+  continuous_iff_continuousAt.2 fun x ↦ (hh.integral_hasStrictDerivAt 0 x).hasDerivAt.continuousAt
+
+/-- `∫_0^t h(a + c) (∫_{a+c}^{a+t} h)^n dc = (∫_a^{a+t} h)^{n+1} / (n + 1)` for continuous `h`. -/
+private lemma integral_mul_integral_pow {h : ℝ → ℝ} (hh : Continuous h) (a t : ℝ) (n : ℕ) :
+    ∫ c in (0 : ℝ)..t, h (a + c) * (∫ s in (a + c)..(a + t), h s) ^ n =
+      (∫ s in a..(a + t), h s) ^ (n + 1) / (n + 1) := by
+  set H : ℝ → ℝ := fun x ↦ ∫ s in (0 : ℝ)..x, h s with hH
+  have hint : ∀ x y : ℝ, ∫ s in x..y, h s = H y - H x := integral_eq_sub_primitive hh
+  simp_rw [hint]
+  have hHd : ∀ x, HasDerivAt H (h x) x := fun x ↦
+    (hh.integral_hasStrictDerivAt 0 x).hasDerivAt
+  have hderiv : ∀ c ∈ uIcc (0 : ℝ) t, HasDerivAt
+      (fun c ↦ -(H (a + t) - H (a + c)) ^ (n + 1) / (n + 1))
+      (h (a + c) * (H (a + t) - H (a + c)) ^ n) c := by
+    intro c _
+    have h1 : HasDerivAt (fun c ↦ H (a + c)) (h (a + c)) c := (hHd (a + c)).comp_const_add a c
+    have h2 := ((h1.const_sub (H (a + t))).pow (n + 1)).neg.div_const ((n : ℝ) + 1)
+    convert h2 using 1
+    simp only [Nat.add_sub_cancel]
+    push_cast
+    field_simp
+  have hcont : Continuous fun c ↦ h (a + c) * (H (a + t) - H (a + c)) ^ n := by
+    have : Continuous H := continuous_primitive hh
+    fun_prop
+  rw [intervalIntegral.integral_eq_sub_of_hasDerivAt hderiv (hcont.intervalIntegrable _ _)]
+  simp only [add_zero, sub_self, ne_eq, Nat.add_eq_zero_iff, one_ne_zero, and_false,
+    not_false_eq_true, zero_pow, neg_zero, zero_div, zero_sub, neg_div, neg_neg]
+
+/-- On the event that exactly `n` arrivals of the interarrival sequence `x` fall in `[0, t]`,
+the product of `h` over these arrival times shifted by `a`; zero off that event. -/
+private noncomputable def gapProd (h : ℝ → ℝ) (n : ℕ) (a t : ℝ) (x : ℕ → ℝ) : ℝ≥0∞ :=
+  {x : ℕ → ℝ | partialSum x n ≤ t ∧ t < partialSum x (n + 1)}.indicator
+    (fun x ↦ ∏ j : Fin n, ENNReal.ofReal (h (a + partialSum x (j + 1)))) x
+
+private lemma measurableSet_gap (n : ℕ) (t : ℝ) :
+    MeasurableSet {x : ℕ → ℝ | partialSum x n ≤ t ∧ t < partialSum x (n + 1)} :=
+  (measurableSet_le (measurable_partialSum n) measurable_const).inter
+    (measurableSet_lt measurable_const (measurable_partialSum (n + 1)))
+
+private lemma measurable_gapProd {h : ℝ → ℝ} (hh : Measurable h) (n : ℕ) (a t : ℝ) :
+    Measurable (gapProd h n a t) := by
+  unfold gapProd
+  refine Measurable.indicator ?_ (measurableSet_gap n t)
+  exact Finset.measurable_prod _ fun j _ ↦
+    ENNReal.measurable_ofReal.comp (hh.comp (measurable_const.add (measurable_partialSum _)))
+
+private lemma gapProd_seqCons (h : ℝ → ℝ) (n : ℕ) (a t c : ℝ) (y : ℕ → ℝ) :
+    gapProd h (n + 1) a t (seqCons c y) =
+      ENNReal.ofReal (h (a + c)) * gapProd h n (a + c) (t - c) y := by
+  unfold gapProd
+  have hmem : seqCons c y ∈
+      {x : ℕ → ℝ | partialSum x (n + 1) ≤ t ∧ t < partialSum x (n + 1 + 1)} ↔
+      y ∈ {x : ℕ → ℝ | partialSum x n ≤ t - c ∧ t - c < partialSum x (n + 1)} := by
+    simp only [mem_ofPred_eq, partialSum_seqCons_succ]
+    constructor <;> rintro ⟨h1, h2⟩ <;> constructor <;> linarith
+  by_cases hy : y ∈ {x : ℕ → ℝ | partialSum x n ≤ t - c ∧ t - c < partialSum x (n + 1)}
+  · rw [indicator_of_mem (hmem.2 hy), indicator_of_mem hy, Fin.prod_univ_succ]
+    congr 1
+    · simp [partialSum, seqCons]
+    · refine Finset.prod_congr rfl fun j _ ↦ ?_
+      rw [show ((j.succ : Fin (n + 1)) : ℕ) + 1 = (j : ℕ) + 1 + 1 by simp,
+        partialSum_seqCons_succ, add_assoc]
+  · rw [indicator_of_notMem (fun h ↦ hy (hmem.1 h)), indicator_of_notMem hy, mul_zero]
+
+/-- One step of the induction: integrating out the first interarrival time. -/
+private lemma lintegral_expMeasure_step {r : ℝ} (hr : 0 < r) {h : ℝ → ℝ} (hh : Continuous h)
+    (hh0 : ∀ s, 0 ≤ h s) (n : ℕ) (a t : ℝ) :
+    ∫⁻ c, ENNReal.ofReal (h (a + c)) * ENNReal.ofReal (if 0 ≤ t - c then
+        Real.exp (-(r * (t - c))) * r ^ n * (∫ s in (a + c)..(a + c + (t - c)), h s) ^ n /
+          (n.factorial : ℝ) else 0) ∂expMeasure r =
+      ENNReal.ofReal (if 0 ≤ t then
+        Real.exp (-(r * t)) * r ^ (n + 1) * (∫ s in a..(a + t), h s) ^ (n + 1) /
+          ((n + 1).factorial : ℝ) else 0) := by
+  set F : ℝ → ℝ := fun c ↦ r ^ (n + 1) * Real.exp (-(r * t)) / (n.factorial : ℝ) *
+    (h (a + c) * (∫ s in (a + c)..(a + t), h s) ^ n) with hF
+  have hpt : ∀ c, gammaPDF 1 r c * (ENNReal.ofReal (h (a + c)) * ENNReal.ofReal
+      (if 0 ≤ t - c then Real.exp (-(r * (t - c))) * r ^ n *
+        (∫ s in (a + c)..(a + c + (t - c)), h s) ^ n / (n.factorial : ℝ) else 0)) =
+      (Icc 0 t).indicator (fun c ↦ ENNReal.ofReal (F c)) c := by
+    intro c
+    by_cases hc0 : 0 ≤ c
+    · by_cases hct : c ≤ t
+      · rw [indicator_of_mem (show c ∈ Icc 0 t from ⟨hc0, hct⟩)]
+        change exponentialPDF r c * _ = _
+        have htc : 0 ≤ t - c := by linarith
+        rw [exponentialPDF_of_nonneg hc0, show a + c + (t - c) = a + t by ring]
+        simp only [htc, ↓reduceIte]
+        have hI : 0 ≤ ∫ s in (a + c)..(a + t), h s :=
+          intervalIntegral.integral_nonneg (by linarith) fun s _ ↦ hh0 s
+        rw [← ENNReal.ofReal_mul (hh0 _), ← ENNReal.ofReal_mul (by positivity)]
+        congr 1
+        rw [hF]
+        have he : Real.exp (-(r * c)) * Real.exp (-(r * (t - c))) = Real.exp (-(r * t)) := by
+          rw [← Real.exp_add]; congr 1; ring
+        rw [← he]
+        ring
+      · have htc : ¬ 0 ≤ t - c := by linarith
+        rw [indicator_of_notMem (show c ∉ Icc 0 t from fun h ↦ hct h.2)]
+        simp [htc]
+    · rw [gammaPDF_of_neg (lt_of_not_ge hc0), zero_mul,
+        indicator_of_notMem (show c ∉ Icc 0 t from fun h ↦ hc0 h.1)]
+  have hHc := continuous_primitive hh
+  rw [expMeasure, gammaMeasure, lintegral_withDensity_eq_lintegral_mul _
+    (by unfold gammaPDF; fun_prop) (by
+      refine Measurable.mul (ENNReal.measurable_ofReal.comp (hh.measurable.comp
+        (measurable_const.add measurable_id))) ?_
+      refine ENNReal.measurable_ofReal.comp (Measurable.ite ?_ ?_ measurable_const)
+      · exact measurableSet_le measurable_const (measurable_const.sub measurable_id)
+      · have hc : Continuous fun c : ℝ ↦ ∫ s in (a + c)..(a + c + (t - c)), h s := by
+          have he : (fun c : ℝ ↦ ∫ s in (a + c)..(a + c + (t - c)), h s) =
+              fun c ↦ (∫ s in (0 : ℝ)..(a + t), h s) - ∫ s in (0 : ℝ)..(a + c), h s := by
+            funext c
+            rw [show a + c + (t - c) = a + t by ring,
+              integral_eq_sub_primitive hh (a + c) (a + t)]
+          rw [he]
+          fun_prop
+        exact (by fun_prop : Continuous fun c : ℝ ↦ Real.exp (-(r * (t - c))) * r ^ n *
+          (∫ s in (a + c)..(a + c + (t - c)), h s) ^ n / (n.factorial : ℝ)).measurable)]
+  simp only [Pi.mul_apply]
+  simp_rw [hpt]
+  rw [lintegral_indicator measurableSet_Icc]
+  have hFc : Continuous F := by
+    have he : F = fun c ↦ r ^ (n + 1) * Real.exp (-(r * t)) / (n.factorial : ℝ) * (h (a + c) *
+        ((∫ s in (0 : ℝ)..(a + t), h s) - ∫ s in (0 : ℝ)..(a + c), h s) ^ n) := by
+      funext c
+      simp only [hF]
+      rw [integral_eq_sub_primitive hh (a + c) (a + t)]
+    rw [he]
+    fun_prop
+  split_ifs with ht
+  · rw [← ofReal_integral_eq_lintegral_ofReal (hFc.integrableOn_Icc)]
+    · rw [integral_Icc_eq_integral_Ioc, ← intervalIntegral.integral_of_le ht, hF,
+        intervalIntegral.integral_const_mul, integral_mul_integral_pow hh a t n]
+      congr 1
+      rw [Nat.factorial_succ]
+      push_cast
+      field_simp
+    · filter_upwards [ae_restrict_mem measurableSet_Icc] with c hc
+      rw [hF]
+      have hI : 0 ≤ ∫ s in (a + c)..(a + t), h s :=
+        intervalIntegral.integral_nonneg (by linarith [hc.2]) fun s _ ↦ hh0 s
+      have := hh0 (a + c)
+      positivity
+  · rw [Icc_eq_empty_of_lt (lt_of_not_ge ht), Measure.restrict_empty, lintegral_zero_measure,
+      ENNReal.ofReal_zero]
+
+/-- The generating functional on the canonical space of interarrival sequences: for continuous
+`h ≥ 0`, `E[1{exactly n arrivals in [0, t]} ∏_{j ≤ n} h(a + S_j)] =
+e^{-r t} r^n (∫_a^{a+t} h)^n / n!`; for `t < 0` the event is empty. -/
+private theorem lintegral_gapProd {r : ℝ≥0} (hr : 0 < r) {h : ℝ → ℝ} (hh : Continuous h)
+    (hh0 : ∀ s, 0 ≤ h s) (n : ℕ) : ∀ a t : ℝ, ∫⁻ x, gapProd h n a t x ∂expSeq r =
+      ENNReal.ofReal (if 0 ≤ t then
+        Real.exp (-(r * t)) * r ^ n * (∫ s in a..(a + t), h s) ^ n / (n.factorial : ℝ)
+        else 0) := by
+  have hr' : (0 : ℝ) < r := hr
+  have hP := isProbabilityMeasure_expMeasure hr'
+  have : ∀ i : ℕ, IsProbabilityMeasure ((fun _ : ℕ ↦ expMeasure (r : ℝ)) i) := fun _ ↦ hP
+  induction n with
+  | zero =>
+    intro a t
+    have hfun : gapProd h 0 a t = {x : ℕ → ℝ | 0 ≤ t ∧ t < x 0}.indicator 1 := by
+      funext x
+      simp [gapProd, partialSum, indicator]
+    have hms : MeasurableSet {x : ℕ → ℝ | 0 ≤ t ∧ t < x 0} :=
+      (MeasurableSet.const _).inter (measurableSet_lt measurable_const (measurable_pi_apply 0))
+    rw [hfun, lintegral_indicator_one hms]
+    split_ifs with ht
+    · have hset : {x : ℕ → ℝ | 0 ≤ t ∧ t < x 0} = (fun x : ℕ → ℝ ↦ x 0) ⁻¹' Ioi t := by
+        ext x; simp [ht]
+      rw [hset, ← Measure.map_apply (measurable_pi_apply 0) measurableSet_Ioi,
+        Measure.infinitePi_map_eval (fun _ : ℕ ↦ expMeasure (r : ℝ)) 0, exp_survival r t hr' ht]
+      simp
+    · have hset : {x : ℕ → ℝ | 0 ≤ t ∧ t < x 0} = ∅ := by ext x; simp [ht]
+      rw [hset, measure_empty, ENNReal.ofReal_zero]
+  | succ n ih =>
+    intro a t
+    have hm : Measurable fun p : ℝ × (ℕ → ℝ) ↦ gapProd h (n + 1) a t (seqCons p.1 p.2) :=
+      (measurable_gapProd hh.measurable _ _ _).comp measurable_seqCons
+    rw [← map_seqCons_expSeq hr, lintegral_map (measurable_gapProd hh.measurable _ _ _)
+      measurable_seqCons, lintegral_prod _ hm.aemeasurable]
+    simp_rw [gapProd_seqCons]
+    simp_rw [lintegral_const_mul _ (measurable_gapProd hh.measurable _ _ _), ih]
+    exact lintegral_expMeasure_step hr' hh hh0 n a t
+
+/-- Up to a null set, exactly `n` arrivals fall in `[0, t]` iff `S n ≤ t < S (n + 1)`. -/
+private lemma count_ae_eq_gap {T : ℕ → Ω → ℝ} {r : ℝ≥0} (hr : 0 < r)
+    (hT : ∀ i, HasLaw (T i) (expMeasure r) P) (hind : iIndepFun T P) (t : ℝ≥0) (n : ℕ) :
+    {ω | arrivalTime T n ω ≤ t ∧ t < arrivalTime T (n + 1) ω} =ᵐ[P] {ω | count T t ω = n} := by
+  have := isProbabilityMeasure_expMeasure (NNReal.coe_pos.mpr hr)
+  have := (hT 0).isProbabilityMeasure
+  have hS := arrivalTime_aemeasurable (fun i ↦ (hT i).aemeasurable)
+  refine ae_eq_of_ae_subset_of_measure_ge ?_ ?_ ?_ (measure_ne_top _ _)
+  · filter_upwards [ae_interarrival_pos hr hT] with ω hω hgap
+    exact count_of_gap T t ω (fun i ↦ (hω i).le) n hgap
+  · rw [gap_probability hr hT hind t n, (hasLaw_count hr hT hind t).measure_eq
+      (measurableSet_singleton n)]
+    rfl
+  · exact (nullMeasurableSet_le (hS n) aemeasurable_const).inter
+      (nullMeasurableSet_lt aemeasurable_const (hS (n + 1)))
+
+/-- For nonnegative interarrival times, each of the first `count T t ω` arrivals happens by
+time `t`. -/
+theorem arrivalTime_le_of_lt_count {T : ℕ → Ω → ℝ} {ω : Ω} (hT : ∀ i, 0 ≤ T i ω) {t : ℝ≥0}
+    {j : ℕ} (hj : j < count T t ω) : arrivalTime T (j + 1) ω ≤ t := by
+  by_contra hgt
+  replace hgt := lt_of_not_ge hgt
+  have hm := arrivalTime_mono T ω hT
+  have hsub : {k : ℕ | arrivalTime T (k + 1) ω ≤ t} ⊆ Iio j := by
+    intro k hk
+    by_contra hkj
+    simp only [mem_Iio, not_lt] at hkj
+    exact absurd (lt_of_lt_of_le hgt (hm (by omega))) (not_lt.2 hk)
+  have := Set.ncard_le_ncard hsub (Set.finite_Iio j)
+  rw [Set.ncard_Iio_nat] at this
+  unfold count at hj
+  omega
+
+/-- **The generating functional of the arrival times** (Karlin–Taylor 1975, ch. 4). Let `T` be
+i.i.d. exponential interarrival times of rate `r > 0`, with arrival times
+`S j = arrivalTime T j` and counting process `N = count T`. For continuous `g ≥ 0`, `t ≥ 0` and
+`n : ℕ`, `E[1{N t = n} ∏_{j = 1}^{n} g (S j)] = e^{-r t} r^n (∫_0^t g)^n / n!`. With `g = 1`
+this is the Poisson law of `N t`; in general, given `N t = n`, the arrival times are distributed
+as the order statistics of `n` independent uniform points of `[0, t]`. -/
+theorem setLIntegral_prod_arrivalTime {T : ℕ → Ω → ℝ} {r : ℝ≥0} (hr : 0 < r)
+    (hT : ∀ i, HasLaw (T i) (expMeasure r) P) (hind : iIndepFun T P) {g : ℝ → ℝ}
+    (hg : Continuous g) (hg0 : ∀ s, 0 ≤ g s) (t : ℝ≥0) (n : ℕ) :
+    ∫⁻ ω in {ω | count T t ω = n}, ∏ j : Fin n, ENNReal.ofReal (g (arrivalTime T (j + 1) ω)) ∂P =
+      ENNReal.ofReal (Real.exp (-(r * t)) * r ^ n * (∫ s in (0 : ℝ)..t, g s) ^ n /
+        (n.factorial : ℝ)) := by
+  have := isProbabilityMeasure_expMeasure (NNReal.coe_pos.mpr hr)
+  have := (hT 0).isProbabilityMeasure
+  have hX : AEMeasurable (fun ω i ↦ T i ω) P :=
+    aemeasurable_pi_iff.2 fun i ↦ (hT i).aemeasurable
+  have hlaw : P.map (fun ω i ↦ T i ω) = expSeq r := by
+    rw [hind.map_fun_eq_infinitePi_map₀' fun i ↦ (hT i).aemeasurable]
+    congr 1
+    funext i
+    exact (hT i).map_eq
+  rw [← Measure.restrict_congr_set (count_ae_eq_gap hr hT hind t n)]
+  have hpre : {ω | arrivalTime T n ω ≤ t ∧ t < arrivalTime T (n + 1) ω} = (fun ω i ↦ T i ω) ⁻¹'
+      {x : ℕ → ℝ | partialSum x n ≤ t ∧ t < partialSum x (n + 1)} := rfl
+  rw [hpre, ← lintegral_indicator₀ (hX.nullMeasurableSet_preimage (measurableSet_gap n t))]
+  have hfun : ((fun ω i ↦ T i ω) ⁻¹' {x : ℕ → ℝ | partialSum x n ≤ t ∧
+      t < partialSum x (n + 1)}).indicator
+      (fun ω ↦ ∏ j : Fin n, ENNReal.ofReal (g (arrivalTime T (j + 1) ω))) =
+      fun ω ↦ gapProd g n 0 t (fun i ↦ T i ω) := by
+    funext ω
+    simp only [gapProd, zero_add]
+    rfl
+  rw [hfun, ← lintegral_map' (measurable_gapProd hg.measurable n 0 t).aemeasurable hX, hlaw,
+    lintegral_gapProd hr hg hg0 n 0 t]
+  simp [t.coe_nonneg]
 
 end PoissonProcess
 

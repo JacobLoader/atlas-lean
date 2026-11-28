@@ -179,4 +179,31 @@ example {Ω : Type*} {mΩ : MeasurableSpace Ω} {P : Measure Ω} {N : ℝ≥0 �
     HasLaw (fun ω ↦ N t ω - N 0 ω) (poissonMeasure (r * t)) P := by
   simpa using h.hasLaw_sub (bot_le : (0 : ℝ≥0) ≤ t)
 
+/-! ### The generating functional of the arrival times -/
+
+/-- With `g = 1` the generating functional is the Poisson mass of `N t`. -/
+example {Ω : Type*} {mΩ : MeasurableSpace Ω} {P : Measure Ω} {T : ℕ → Ω → ℝ} {r : ℝ≥0}
+    (hr : 0 < r) (hT : ∀ i, HasLaw (T i) (expMeasure r) P) (hind : iIndepFun T P) (t : ℝ≥0)
+    (n : ℕ) :
+    P {ω | count T t ω = n} =
+      ENNReal.ofReal (Real.exp (-(r * t)) * r ^ n * t ^ n / (n.factorial : ℝ)) := by
+  have := setLIntegral_prod_arrivalTime hr hT hind (g := fun _ ↦ 1) continuous_const
+    (fun _ ↦ zero_le_one) t n
+  simpa using this
+
+/-- Given one arrival in `[0, t]`, its time is uniform on `[0, t]`:
+`E[1{N t = 1} S₁²] = e^{-r t} r t³ / 3`. -/
+example {Ω : Type*} {mΩ : MeasurableSpace Ω} {P : Measure Ω} {T : ℕ → Ω → ℝ} {r : ℝ≥0}
+    (hr : 0 < r) (hT : ∀ i, HasLaw (T i) (expMeasure r) P) (hind : iIndepFun T P) (t : ℝ≥0) :
+    ∫⁻ ω in {ω | count T t ω = 1}, ENNReal.ofReal (arrivalTime T 1 ω ^ 2) ∂P =
+      ENNReal.ofReal (Real.exp (-(r * t)) * r * t ^ 3 / 3) := by
+  have := setLIntegral_prod_arrivalTime hr hT hind (g := fun s ↦ s ^ 2) (continuous_pow 2)
+    (fun s ↦ sq_nonneg s) t 1
+  simp only [Finset.univ_unique, Fin.default_eq_zero, Fin.val_zero, zero_add,
+    Finset.prod_singleton, integral_pow, pow_one, Nat.factorial_one, Nat.cast_one,
+    div_one] at this
+  rw [this]
+  congr 1
+  ring
+
 end MathlibExtTest.Probability.Process.PoissonProcess

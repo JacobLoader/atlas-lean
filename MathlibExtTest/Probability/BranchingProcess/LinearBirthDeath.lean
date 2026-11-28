@@ -100,4 +100,18 @@ example (b d t : ℝ) (hb : 0 ≤ b) (hd : 0 ≤ d) (ht : 0 ≤ t) :
       (d - (b + d) * extinctionProb b d t + b * extinctionProb b d t ^ 2) t :=
   hasDerivAt_extinctionProb hb hd ht
 
+/-! ### Generating function -/
+
+/-- At `z = 0` the generating function is the extinction probability. -/
+example (b d t : ℝ) (hb : 0 ≤ b) (hd : 0 ≤ d) (ht : 0 ≤ t) :
+    HasSum (fun n : ℕ ↦ prob b d t n * 0 ^ n) (extinctionProb b d t) := by
+  simpa using hasSum_prob_mul_pow hb hd ht (z := 0) (by simp)
+
+/-- At time `0` the population is one individual, with generating function `z`. -/
+example (z : ℝ) (hz0 : 0 ≤ z) (hz1 : z ≤ 1) : HasSum (fun n : ℕ ↦ prob 2 1 0 n * z ^ n) z := by
+  convert hasSum_prob_mul_pow_of_ne (b := 2) (d := 1) (t := 0) (by norm_num) (by norm_num) le_rfl
+    (by norm_num) hz0 hz1 using 1
+  rw [mul_zero, exp_zero, show (2 : ℝ) * (1 - z) * 1 + 2 * z - 1 = 1 by ring]
+  ring
+
 end MathlibExtTest.Probability.BranchingProcess.LinearBirthDeath

@@ -65,4 +65,17 @@ vanish, so the formula is not a probability law there. -/
 example (k : ℕ) : negBinomialPMF 2 0 k = 0 := by
   simp [negBinomialPMF]
 
+/-- The generating function of `NB(2, 1/2)` at `z = 1/2`: `((1/2) / (3/4))² = 4/9`. -/
+example : HasSum (fun k : ℕ ↦ negBinomialPMF 2 (1 / 2) k * (1 / 2) ^ k) (4 / 9) := by
+  convert hasSum_negBinomialPMF_mul_pow (r := 2) (p := 1 / 2) (z := 1 / 2) (by norm_num)
+    (by norm_num) (by rw [abs_of_pos (by norm_num)]; norm_num) using 1
+  rw [Real.rpow_two]
+  norm_num
+
+/-- At `z = 1` the generating function is the total mass `1`. -/
+example (r p : ℝ) (hp : 0 < p) (hp1 : p ≤ 1) :
+    HasSum (fun k : ℕ ↦ negBinomialPMF r p k * 1 ^ k) 1 := by
+  convert hasSum_negBinomialPMF_mul_pow (r := r) hp hp1 (z := 1) (by simp) using 1
+  rw [mul_one, sub_sub_cancel, div_self hp.ne', Real.one_rpow]
+
 end MathlibExtTest.Probability.Distributions.NegativeBinomialSplitting
