@@ -18,3 +18,4 @@
 - [Edges among a set of vertices](remaining-edges.md)
 - [Key estimate of Luby's analysis](inv-le-uniform-on-smallest.md)
 - [Luby's maximal independent set algorithm](luby-s-maximal-independent-set-algorithm.md)
+- [The LOCAL Model: Symmetry Breaking and LCL Problems](local-model-symmetry-and-lcl/README.md)
