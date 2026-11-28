@@ -64,9 +64,8 @@ number of non-split reads spanning the boundary at the splice site `t`.
   FRASER 2.0 feeds to its denoising autoencoder, lies in `(0, 1)`, also when `n = 0`.
 
 This file does not model read alignment or the filtering of introns, nor the rest of FRASER 2.0:
-the autoencoder that predicts `J`, the beta-binomial test of `k` given `n` (for shape parameters
-`α, β > 0` the beta-binomial mean `n α / (α + β)` is `ProbabilityTheory.sum_mul_betaBinomialPMF`)
-and the multiple-testing corrections.
+the autoencoder that predicts `J`, the beta-binomial test of `k` given `n` (the beta-binomial
+mean is `ProbabilityTheory.sum_mul_betaBinomialPMF`) and the multiple-testing corrections.
 -/
 
 @[expose] public section
@@ -170,8 +169,8 @@ variable [DecidableEq ι] [DecidableEq κ]
 Jaccard index `|D ∩ A| / |D ∪ A|` of the donor-associated observations `D` at `d` and the
 acceptor-associated observations `A` at `a`, counted in evidence units. With the convention
 `x / 0 = 0` it is `0` when no read gives evidence at `d` or `a`
-(`intronJaccard_eq_zero_of_no_evidence`), where the ratio is undefined. For `d ≠ a` it equals
-`s j / (∑_{j' ∈ L} s j' + ∑_{j' ∈ R} s j' + ∑_{t ∈ {d, a}} u t - s j)` (`intronJaccard_eq`). -/
+(`intronJaccard_eq_zero_of_no_evidence`), where the ratio is undefined. For `d ≠ a` it has a
+closed form in split and non-split read counts (`intronJaccard_eq`). -/
 noncomputable def intronJaccard (j : Site × Site) : ℝ :=
   #(x.donorObservations j.1 ∩ x.acceptorObservations j.2) /
     #(x.donorObservations j.1 ∪ x.acceptorObservations j.2)
