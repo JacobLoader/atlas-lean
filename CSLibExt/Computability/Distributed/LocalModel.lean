@@ -33,17 +33,20 @@ are arbitrary functions, so message size and local computation are unrestricted.
   identifier `j`, and moves to `update s m`, where `m` is the multiset of messages its neighbours
   sent it; a node in state `s` outputs `out s`. The multiset does not record the senders; a node
   can include its identifier in its messages.
-* **Knowledge.** A node starts knowing only its identifier and its input; unlike in Suomela's
-  port-numbering model, it does not know its degree, and there are no ports. The maps of a
-  `LocalAlgorithm` do not take `n`, but the algorithm is a parameter, so a statement may choose it
-  depending on `n` or on the graph (Linial's lower bounds hold even if every processor knows the
-  graph in advance, and only the identifiers are unknown). Choosing it after seeing the
+* **Knowledge.** A node's state starts from only its identifier and its input; unlike in
+  Suomela's port-numbering model, it does not start knowing its degree, and there are no ports.
+  A node learns its neighbours' identifiers only from messages that carry them. The maps
+  of a `LocalAlgorithm` do not take `n`, but the algorithm is a parameter, so a statement may
+  choose it depending on `n` or on the graph (Linial's lower bounds hold even if every processor
+  knows the graph in advance, and only the identifiers are unknown). Choosing it after seeing the
   identifiers or the inputs is a different matter: such an algorithm could store a colouring for
   the given identifiers and output it in zero rounds. The locality theorems keep the algorithm and
   the number of rounds fixed.
-* **Addressing.** Addressing a message by its recipient's identifier is no stronger than sending
-  every neighbour the same message: `LocalAlgorithm.broadcast` sends the map `j ↦ send s j` and
-  lets the recipient apply it to its own identifier, with the same outputs
+* **Addressing.** A message is addressed by its recipient's identifier, which the model passes to
+  `send` whether or not the sender's state records it: an addressing convention of the abstract
+  model, not knowledge the sender has to acquire. This is no stronger than sending every neighbour
+  the same message: `LocalAlgorithm.broadcast` sends the map `j ↦ send s j` and lets the
+  recipient apply it to its own identifier, with the same outputs
   (`LocalAlgorithm.broadcast_output`). This is an equality of outputs in the abstract round model,
   where a message may be any value, a function included; it is not a finite-bit encoding or an
   effective implementation. When states can be encoded and `send` is computable, a node can send
