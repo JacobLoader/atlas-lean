@@ -43,7 +43,9 @@ threshold (`GradedLists.ThresholdRun.StoppingRuleHolds`). TA halts at the first 
 returns its buffer. The source states the rule for all objects seen, not only the buffered ones: at
 least `k` objects seen have aggregate grade at least the threshold. The two forms agree
 (`GradedLists.ThresholdRun.stoppingRuleHolds_iff_seen`); with the buffered form, every decision of
-the algorithm depends only on its buffer and the round.
+the algorithm depends only on its buffer and the round. The rule is checked only after complete
+rounds, whereas the source halts as soon as it holds; nothing is claimed here about stopping partway
+through a round.
 
 ## Main results
 
@@ -58,13 +60,16 @@ the algorithm depends only on its buffer and the round.
   the buffer is a top-`k` answer after every round at which the stopping rule holds, in
   particular after the first.
 * `thresholdAlgorithm_correct` gathers these five facts.
+* `isTopKAmong_univ_iff`: on a finite type with at least `k` elements, a top-`k` choice among all
+  elements is the same as a top-`k` answer.
 
 ## References
 
 * R. Fagin, A. Lotem and M. Naor, *Optimal aggregation algorithms for middleware*, J. Comput.
   System Sci. 66 (2003), 614–656; arXiv:cs/0204046, Section 1 (the model; ties broken
-  arbitrarily), Section 2 (sorted and random access) and Section 4 (the threshold algorithm,
-  Theorems 4.1 and 4.2).
+  arbitrarily), Section 2 (sorted and random access), Section 3 (sorted access in parallel: step 1
+  of Fagin's algorithm and its footnote 6) and Section 4 (the threshold algorithm, Theorems 4.1
+  and 4.2).
 -/
 
 @[expose] public section
@@ -159,6 +164,13 @@ theorem exists_isTopKAmong (f : α → β) (k : ℕ) (S : Finset α) : ∃ B, Is
       obtain rfl : B = S := subset_antisymm hBS hne
       exact ⟨B, subset_rfl, by omega, fun y _ z hz hzB => absurd hz hzB⟩
 
+-- On a finite type with at least `k` elements, a top-`k` choice among all elements is a top-`k`
+-- answer, and conversely.
+theorem isTopKAmong_univ_iff [Fintype α] {f : α → β} {k : ℕ} {Y : Finset α}
+    (hk : k ≤ Fintype.card α) : IsTopKAmong f k Finset.univ Y ↔ IsTopK f k Y := by
+  simp only [IsTopKAmong, IsTopK, Finset.card_univ, min_eq_left hk, Finset.subset_univ,
+    Finset.mem_univ, true_and, forall_const]
+
 end TopK
 
 /-- **Graded sorted lists.** A database of $N$ objects of a type $\alpha$ with $m$ attributes,
@@ -197,13 +209,13 @@ at position $p$ of list $i$, the last grade read from that list. -/
 def threshold (t : (Fin m → ℝ) → ℝ) (p : Fin N) : ℝ :=
   t fun i => D.grade i (D.list i p)
 
-theorem grade_list_mem_Icc (x : Fin m → α) : (fun i => D.grade i (x i)) ∈ Set.Icc 0 1 :=
+theorem grades_mem_Icc (x : Fin m → α) : (fun i => D.grade i (x i)) ∈ Set.Icc 0 1 :=
   ⟨fun i => (D.grade_mem_Icc i (x i)).1, fun i => (D.grade_mem_Icc i (x i)).2⟩
 
 -- After the last position every object has aggregate grade at least the threshold.
 theorem threshold_le_aggregate_of_last {t : (Fin m → ℝ) → ℝ} (ht : MonotoneOn t (Set.Icc 0 1))
     {p : Fin N} (hp : (p : ℕ) + 1 = N) (x : α) : D.threshold t p ≤ D.aggregate t x := by
-  refine ht (D.grade_list_mem_Icc fun i => D.list i p) (D.grade_list_mem_Icc fun _ => x)
+  refine ht (D.grades_mem_Icc fun i => D.list i p) (D.grades_mem_Icc fun _ => x)
     fun i => ?_
   have hpi : (D.list i).symm x ≤ p :=
     Fin.le_iff_val_le_val.2 (by have := ((D.list i).symm x).isLt; omega)
@@ -259,7 +271,7 @@ theorem seen_succ (d : ℕ) : D.seen (d + 1) = D.seen d ∪ D.row d := by
 theorem aggregate_le_threshold_of_notMem_seen {t : (Fin m → ℝ) → ℝ}
     (ht : MonotoneOn t (Set.Icc 0 1)) {p : Fin N} {x : α} (hx : x ∉ D.seen ((p : ℕ) + 1)) :
     D.aggregate t x ≤ D.threshold t p := by
-  refine ht (D.grade_list_mem_Icc fun _ => x) (D.grade_list_mem_Icc fun i => D.list i p)
+  refine ht (D.grades_mem_Icc fun _ => x) (D.grades_mem_Icc fun i => D.list i p)
     fun i => ?_
   have hpi : p ≤ (D.list i).symm x := by
     rw [mem_seen, not_exists] at hx

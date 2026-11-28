@@ -52,4 +52,5 @@ grade at least $\tau$, and the stopping rule holds.
 
 - R. Fagin, A. Lotem and M. Naor, *Optimal aggregation algorithms for middleware*, J. Comput. System Sci. 66 (2003),
   614–656; arXiv:cs/0204046, Section 1 (the model; ties broken arbitrarily), Section 2 (sorted and random access),
-  and Section 4 (the threshold algorithm, Theorems 4.1 and 4.2). <https://arxiv.org/abs/cs/0204046>
+  Section 3 (sorted access in parallel: step 1 of Fagin's algorithm and its footnote 6), and Section 4 (the threshold
+  algorithm, Theorems 4.1 and 4.2). <https://arxiv.org/abs/cs/0204046>
