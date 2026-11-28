@@ -29,9 +29,11 @@ authenticated asynchronous point-to-point channels when at most `f` parties are 
 * a party delivers `v` on receiving `⟨vote, v⟩` from `n - f` distinct parties, unless it has
   already delivered a value.
 
-It satisfies validity (with a non-faulty leader, every non-faulty party eventually delivers
-the leader's input), agreement (non-faulty parties that deliver deliver the same value) and
-totality (if a non-faulty party delivers, every non-faulty party eventually delivers).
+When `n > 3 f` and at most `f` parties are faulty, it satisfies agreement in every reachable
+state (non-faulty parties that have delivered have delivered the same value), and, in every fair
+infinite execution from the initial state, validity (with a non-faulty leader, every non-faulty
+party eventually delivers the leader's input) and totality (if a non-faulty party delivers, every
+non-faulty party eventually delivers a value).
 
 ## Model
 
@@ -52,16 +54,19 @@ totality (if a non-faulty party delivers, every non-faulty party eventually deli
 
 ## Proof
 
-Agreement holds in every reachable state by an inductive invariant. Each vote of a party is
-backed by `n - f` echoes for its value received by some party: either its own, or, for a vote
-cast after `f + 1` votes, those backing the vote of a non-faulty voter among them. Two sets of
-`n - f` parties share a non-faulty party, which echoes at most once, so no two parties vote for
-different values. A delivered value has `n - f > f` votes, one of them non-faulty, so delivered
-values agree too.
+Agreement holds in every reachable state by an inductive invariant, for `n > 3 f` and at most
+`f` faulty parties. Each vote recorded in the state, which is the vote of a non-faulty party, is
+backed by `n - f` echoes for its value received by some party: either the voter's own, or, for a
+vote cast after `f + 1` votes, those backing the vote of a non-faulty voter among them. Two sets
+of at least `n - f` parties have a common member outside `F`, which echoes at most once, so no two
+non-faulty parties vote for different values. A non-faulty party that has delivered a value has
+received votes for it from `n - f > f` parties, one of them non-faulty, so delivered values agree
+too.
 
 Validity and totality follow in fair executions. With a non-faulty leader every non-faulty
 party receives its input, echoes it, receives `n - f` echoes for it and votes for it; every
-vote is for the input, so every non-faulty party receives `n - f` votes for it and delivers it.
+non-faulty vote is for the input, so every non-faulty party receives `n - f` votes for it and
+delivers it.
 If a non-faulty party delivers `v`, at least `n - 2 f ≥ f + 1` non-faulty parties voted for
 `v`; every non-faulty party receives these votes and votes, necessarily for `v`, and then
 receives `n - f` votes for `v` and delivers.
@@ -325,7 +330,8 @@ private lemma exists_honest_of_card {A : Finset P} (hF : #F ≤ f) (hA : f + 1 �
   exists_mem_notMem_of_card_lt_card (by omega)
 
 omit [DecidableEq P] in
-/-- Quorum intersection: two sets of `n - f` parties share a non-faulty party. -/
+/-- Quorum intersection: if `n > 3 f` and `F` has at most `f` parties, two sets of at least
+`n - f` parties have a common member outside `F`. -/
 private lemma exists_honest_inter (hf : 3 * f < Fintype.card P) (hF : #F ≤ f) {A B : Finset P}
     (hA : Fintype.card P - f ≤ #A) (hB : Fintype.card P - f ≤ #B) :
     ∃ p ∈ A, p ∈ B ∧ p ∉ F := by
@@ -523,7 +529,8 @@ section Safety
 
 variable {f : ℕ} {leader : P} {input : V} {F : Finset P} {s : BrachaState P V}
 
-/-- No two parties vote for different values. -/
+/-- In a state satisfying the invariant, with `n > 3 f` and at most `f` faulty parties, no two
+parties have recorded votes (`voted`) for different values. -/
 private lemma Inv.voted_eq (hf : 3 * f < Fintype.card P) (hF : #F ≤ f)
     (hI : Inv f leader input F s) {i j : P} {v w : V} (hv : s.voted i = some v)
     (hw : s.voted j = some w) : v = w := by
@@ -534,7 +541,9 @@ private lemma Inv.voted_eq (hf : 3 * f < Fintype.card P) (hF : #F ≤ f)
   exact Option.some_injective _ <| (hI.sent_echo ((hI.rcvd_sent hpv).resolve_left hpF)).symm.trans
     (hI.sent_echo ((hI.rcvd_sent hpw).resolve_left hpF))
 
-/-- A delivered value has been voted for by a non-faulty party. -/
+/-- In a state satisfying the invariant, with `n > 3 f` and at most `f` faulty parties, a value
+that a party has recorded as delivered (`delivered`) has a recorded vote (`voted`) of a
+non-faulty party. -/
 private lemma Inv.voted_of_delivered (hf : 3 * f < Fintype.card P) (hF : #F ≤ f)
     (hI : Inv f leader input F s) {i : P} {v : V} (hv : s.delivered i = some v) :
     ∃ p ∉ F, s.voted p = some v := by
@@ -544,12 +553,15 @@ private lemma Inv.voted_of_delivered (hf : 3 * f < Fintype.card P) (hF : #F ≤ 
   simp only [mem_filter, mem_univ, true_and] at hp
   exact ⟨p, hpF, hI.sent_vote ((hI.rcvd_sent hp).resolve_left hpF)⟩
 
-/-- With a non-faulty leader, every echoed value is the leader's input. -/
+/-- In a state satisfying the invariant, with a non-faulty leader, every value that a party has
+recorded as echoed (`echoed`) is the leader's input. -/
 private lemma Inv.echoed_eq_input (hI : Inv f leader input F s) (hl : leader ∉ F) {i : P} {w : V}
     (hw : s.echoed i = some w) : w = input :=
   (hI.sent_init ((hI.rcvd_sent (hI.echoed_rcvd hw)).resolve_left hl)).2
 
-/-- With a non-faulty leader, every vote is for the leader's input. -/
+/-- In a state satisfying the invariant, with `n > 3 f`, at most `f` faulty parties and a
+non-faulty leader, every value that a party has recorded as voted for (`voted`) is the leader's
+input. -/
 private lemma Inv.voted_eq_input (hf : 3 * f < Fintype.card P) (hF : #F ≤ f)
     (hI : Inv f leader input F s) (hl : leader ∉ F) {i : P} {w : V} (hw : s.voted i = some w) :
     w = input := by
@@ -591,8 +603,9 @@ private lemma exists_rcvd_all (h : (brachaLTS f leader F).OmegaExecution ss μs)
     · exact (le_of_exec h (le_max_right K K')).rcvd i hK'
     · exact (le_of_exec h (le_max_left K K')).rcvd i (hK p hp)
 
-/-- If every non-faulty party eventually votes for `v`, every non-faulty party eventually
-delivers. -/
+/-- In a fair infinite execution from the initial state, with `n > 3 f` and at most `f` faulty
+parties, if every non-faulty party votes for `v` at some point, then every non-faulty party
+delivers a value at some point. -/
 private lemma exists_delivered (hf : 3 * f < Fintype.card P) (hF : #F ≤ f)
     (h : (brachaLTS f leader F).OmegaExecution ss μs) (h0 : ss 0 = brachaStart leader input F)
     (hfair : BrachaFair F ss) {v : V} (hv : ∀ p ∉ F, ∃ k, (ss k).voted p = some v) {i : P}

@@ -15,10 +15,13 @@ public import Mathlib.Data.Fintype.Prod
 /-!
 # Tests for Bracha's Byzantine reliable broadcast
 
-* Fair executions exist: from any state, a scheduler that delivers pending messages of
-  non-faulty parties, and stutters when there are none, runs a fair infinite execution when
-  the values are finite. So the fairness hypothesis of `bracha_reliable_broadcast` is satisfiable.
-* With a non-faulty leader, every non-faulty party delivers the input in that execution.
+* Fair executions exist: with finitely many parties and finitely many values, a scheduler that
+  receives an enabled message recorded in the sent messages, and stutters when there is none,
+  runs a fair infinite execution from any state. So the fairness hypothesis of
+  `bracha_reliable_broadcast` is satisfiable.
+* From the initial state, with `n > 3 f`, at most `f` faulty parties and a non-faulty leader,
+  every non-faulty party delivers the input in that execution. From an arbitrary state the
+  execution is still fair, but the state may already record other deliveries.
 * The main theorem applies to four parties and one fault.
 * A faulty leader may stay silent: the stuttering execution is then fair and nobody delivers.
   With a non-faulty leader the same execution is not fair.
@@ -40,8 +43,9 @@ section Scheduler
 
 variable (f : ℕ) (leader : P) (F : Finset P)
 
-/-- One step of the scheduler: deliver some pending message that a non-faulty party has sent,
-or stutter if there is none. -/
+/-- One step of the scheduler: receive an enabled message recorded in `s.sent`, or stutter if
+there is none. The receiver is non-faulty; the sender is known to be non-faulty when the
+execution starts from the protocol's initial state. -/
 noncomputable def schedStep (s : BrachaState P V) :
     Option (P × P × BrachaKind × V) × BrachaState P V := by
   classical
@@ -108,7 +112,8 @@ lemma received_le [Fintype V] (s : BrachaState P V) :
         rw [sum_const, card_univ]
         rfl
 
-/-- With finitely many values, the scheduler eventually has nothing left to deliver. -/
+/-- With finitely many parties and finitely many values, the scheduler eventually has nothing
+left to deliver. -/
 lemma exists_stuck [Fintype V] (s : BrachaState P V) : ∃ K,
     ¬∃ x t, (brachaLTS f leader F).Tr (schedStates f leader F s K) (some x) t ∧
       x ∈ (schedStates f leader F s K).sent := by
@@ -145,8 +150,8 @@ lemma schedStates_stuck {s : BrachaState P V} {K : ℕ}
     change (schedStep f leader F (schedStates f leader F s (K + m))).2 = _
     rw [ih, schedStep_of_stuck f leader F hK]
 
-/-- **Fair executions exist.** With finitely many values, every state starts a fair infinite
-execution. -/
+/-- **Fair executions exist.** With finitely many parties and finitely many values, every state
+starts a fair infinite execution. -/
 theorem exists_fair_execution [Fintype V] (s : BrachaState P V) :
     ∃ (ss : ωSequence (BrachaState P V)) (μs : ωSequence (Option (P × P × BrachaKind × V))),
       (brachaLTS f leader F).OmegaExecution ss μs ∧ ss 0 = s ∧ BrachaFair F ss := by
@@ -172,15 +177,18 @@ end Scheduler
 
 /-! ### Consequences and boundary cases -/
 
-/-- With a non-faulty leader and finitely many values, the scheduled execution is fair, so every
-non-faulty party delivers the leader's input in it. -/
+/-- With `n > 3 f`, at most `f` faulty parties, a non-faulty leader and finitely many values,
+there is a fair infinite execution from the initial state, and in it every non-faulty party
+delivers the leader's input at some point. -/
 example [Fintype V] (f : ℕ) (hf : 3 * f < Fintype.card P) (F : Finset P) (hF : #F ≤ f)
     (leader : P) (hl : leader ∉ F) (input : V) :
-    ∃ ss : ωSequence (BrachaState P V), ss 0 = brachaStart leader input F ∧
-      ∀ i ∉ F, ∃ k, (ss k).delivered i = some input := by
+    ∃ (ss : ωSequence (BrachaState P V)) (μs : ωSequence (Option (P × P × BrachaKind × V))),
+      (brachaLTS f leader F).OmegaExecution ss μs ∧ ss 0 = brachaStart leader input F ∧
+      BrachaFair F ss ∧ ∀ i ∉ F, ∃ k, (ss k).delivered i = some input := by
   obtain ⟨ss, μs, h, h0, hfair⟩ :=
     exists_fair_execution (f := f) (leader := leader) (F := F) (brachaStart leader input F)
-  exact ⟨ss, h0, (bracha_reliable_broadcast f hf F hF leader input).1 hl ss μs h h0 hfair⟩
+  exact ⟨ss, μs, h, h0, hfair,
+    (bracha_reliable_broadcast f hf F hF leader input).1 hl ss μs h h0 hfair⟩
 
 /-- The theorem applies to four parties with one fault. -/
 example (F : Finset (Fin 4)) (hF : #F ≤ 1) (leader : Fin 4) (input : Bool) :=
