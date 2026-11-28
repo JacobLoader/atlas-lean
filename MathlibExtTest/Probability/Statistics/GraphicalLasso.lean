@@ -122,4 +122,47 @@ example {S : Matrix (Fin 2) (Fin 2) ℝ} (hS : S.PosSemidef) :
   existsUnique_isGraphicalLassoEstimate (fun i j => by fin_cases i <;> fin_cases j <;> norm_num)
     (fun i => by fin_cases i <;> norm_num) hS
 
+/-- Zero penalty weights in the weighted optimality conditions: for `S = diag (1, 0)` and
+`P = diag (0, 1)`, `Θ = I` is the estimate, with certificate `Γ = I`. Off the diagonal both `Pᵢⱼ`
+and `Θᵢⱼ` vanish. -/
+theorem isGraphicalLassoEstimate_zero_weights :
+    IsGraphicalLassoEstimate (diagonal ![0, 1]) (diagonal ![1, 0])
+      (1 : Matrix (Fin 2) (Fin 2) ℝ) := by
+  rw [isGraphicalLassoEstimate_iff (fun i j => by fin_cases i <;> fin_cases j <;> simp)
+    (isSymm_diagonal _) (isSymm_diagonal _) PosDef.one, inv_one]
+  refine ⟨1, fun i j h => ?_, fun i j h => ?_, ?_⟩
+  · fin_cases i <;> fin_cases j <;> simp_all
+  · fin_cases i <;> fin_cases j <;> simp_all
+  · ext i j
+    fin_cases i <;> fin_cases j <;> simp
+
+/-- The weight at an off-diagonal entry matters. With `P = diag (0, 1)`, `Θ = I` is not the
+estimate for `S = [[1, 1/2], [1/2, 0]]`: the optimality conditions fail at `(0, 1)`, where
+`P₀₁ = 0` but `(Θ⁻¹ - S)₀₁ = -1/2`. -/
+example : ¬ IsGraphicalLassoEstimate (diagonal ![0, 1]) !![1, 1 / 2; 1 / 2, 0]
+    (1 : Matrix (Fin 2) (Fin 2) ℝ) := by
+  have hS : (!![1, 1 / 2; 1 / 2, 0] : Matrix (Fin 2) (Fin 2) ℝ).IsSymm :=
+    IsSymm.ext fun i j => by fin_cases i <;> fin_cases j <;> rfl
+  rw [isGraphicalLassoEstimate_iff (fun i j => by fin_cases i <;> fin_cases j <;> simp)
+    (isSymm_diagonal _) hS PosDef.one, inv_one]
+  rintro ⟨Γ, -, -, h⟩
+  have h01 := congrFun (congrFun h 0) 1
+  norm_num at h01
+
+/-- With weight `1` at `(0, 1)` instead, `Θ = I` is the estimate for the same `S`, with
+certificate `Γ = [[1, -1/2], [-1/2, 1]]`. -/
+example : IsGraphicalLassoEstimate !![0, 1; 1, 1] !![1, 1 / 2; 1 / 2, 0]
+    (1 : Matrix (Fin 2) (Fin 2) ℝ) := by
+  have hS : (!![1, 1 / 2; 1 / 2, 0] : Matrix (Fin 2) (Fin 2) ℝ).IsSymm :=
+    IsSymm.ext fun i j => by fin_cases i <;> fin_cases j <;> rfl
+  have hP : (!![0, 1; 1, 1] : Matrix (Fin 2) (Fin 2) ℝ).IsSymm :=
+    IsSymm.ext fun i j => by fin_cases i <;> fin_cases j <;> rfl
+  rw [isGraphicalLassoEstimate_iff (fun i j => by fin_cases i <;> fin_cases j <;> norm_num) hP hS
+    PosDef.one, inv_one]
+  refine ⟨!![1, -1 / 2; -1 / 2, 1], fun i j => ?_, fun i j => ?_, ?_⟩
+  · fin_cases i <;> fin_cases j <;> norm_num
+  · fin_cases i <;> fin_cases j <;> norm_num
+  · ext i j
+    fin_cases i <;> fin_cases j <;> norm_num
+
 end MathlibExtTest.Probability.Statistics.GraphicalLasso
