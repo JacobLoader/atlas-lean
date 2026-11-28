@@ -40,6 +40,28 @@ example : poissonCDF 1 2 < poissonCDF 1 3 ∧ poissonCDF 2 3 < poissonCDF 1 3 :=
   ⟨poissonCDF_lt_poissonCDF_succ one_pos 2,
     poissonCDF_strictAntiOn 3 (by norm_num : (1 : ℝ) ∈ Ici 0) (by norm_num) (by norm_num)⟩
 
+/-! ### Upper tails -/
+
+/-- `P(K ≥ 0) = 1`: the sum in `poissonMeasure_real_Ici` is empty. -/
+example (r : ℝ≥0) : (poissonMeasure r).real (Set.Ici 0) = 1 := by
+  rw [poissonMeasure_real_Ici, Finset.sum_range_zero, sub_zero]
+
+/-- `P(K ≥ 2) = 1 - e^{-r} (1 + r)`. -/
+example (r : ℝ≥0) :
+    (poissonMeasure r).real (Set.Ici 2) = 1 - exp (-(r : ℝ)) * (1 + r) := by
+  simp [poissonMeasure_real_Ici, Finset.sum_range_succ]
+  ring
+
+/-- The upper tail is `1 - F_k`: `P(K ≥ 1) = 1 - e^{-r}`. -/
+example (r : ℝ≥0) : (poissonMeasure r).real (Set.Ici 1) = 1 - exp (-(r : ℝ)) := by
+  rw [poissonMeasure_real_Ici_succ, poissonCDF_zero_right]
+
+/-- A larger mean gives a strictly larger upper tail at `n = 3`, and at `n = 0` both are `1`. -/
+example : (poissonMeasure 1).real (Set.Ici 3) < (poissonMeasure 2).real (Set.Ici 3) ∧
+    (poissonMeasure 2).real (Set.Ici 0) ≤ (poissonMeasure 1).real (Set.Ici 0) := by
+  refine ⟨poissonMeasure_real_Ici_strictMono (by norm_num) (by norm_num), ?_⟩
+  simp
+
 /-! ### Garwood's bound -/
 
 /-- With no events, the 95% upper bound (`α = 1/20`) is `log 20`. -/

@@ -33,6 +33,8 @@ for every mean.
   (a corollary of `gammaMeasure_real_Ioi_natCast_add_one` in `GammaMoments`).
 * `poissonCDF_strictAntiOn`, `poissonCDF_lt_poissonCDF_succ`, `tendsto_poissonCDF_atTop`:
   monotonicity in the mean and in `k`, and the limit `0` as the mean grows.
+* `poissonMeasure_real_Ici`, `poissonMeasure_real_Ici_strictMono`: the upper tail
+  `P(K ≥ n) = 1 - ∑_{j < n} e^{-r} r^j / (j!)`, strictly increasing in the mean for `n ≥ 1`.
 * `garwoodUpper`: the bound `u_α(k) = sup {x ≥ 0 | α ≤ F_k(x)}`; `poissonCDF_garwoodUpper`
   (it solves `F_k(u) = α`), `le_garwoodUpper_iff`, `garwoodUpper_strictMono` (strictly
   increasing in `k`), `garwoodUpper_zero` (`u_α(0) = log (1 / α)`).
@@ -150,6 +152,43 @@ theorem poissonCDF_mono {x : ℝ} (hx : 0 ≤ x) : Monotone fun k => poissonCDF 
   intro j k hjk
   exact Finset.sum_le_sum_of_subset_of_nonneg (Finset.range_subset_range.mpr (by omega))
     fun i _ _ => by positivity
+
+/-- The upper tail of Mathlib's `poissonMeasure r` at `n`:
+`P(K ≥ n) = 1 - ∑_{j < n} e^{-r} r^j / (j!)`. It is `1` at `n = 0` and `1 - F_{n-1}(r)` for
+`n ≥ 1` (`poissonMeasure_real_Ici_succ`). -/
+theorem poissonMeasure_real_Ici (r : ℝ≥0) (n : ℕ) :
+    (poissonMeasure r).real (Set.Ici n) =
+      1 - ∑ j ∈ range n, exp (-(r : ℝ)) * (r : ℝ) ^ j / (j ! : ℝ) := by
+  have hset : Set.Ici n = ((range n : Finset ℕ) : Set ℕ)ᶜ := by
+    ext j
+    simp
+  rw [hset, probReal_compl_eq_one_sub (Finset.measurableSet _), ← sum_measureReal_singleton]
+  simp only [poissonMeasure_real_singleton]
+
+/-- `P(K ≥ k + 1) = 1 - F_k(r)` for `K ~ Poisson(r)`. -/
+theorem poissonMeasure_real_Ici_succ (r : ℝ≥0) (k : ℕ) :
+    (poissonMeasure r).real (Set.Ici (k + 1)) = 1 - poissonCDF r k := by
+  rw [poissonMeasure_real_Ici, poissonCDF]
+
+/-- For `n ≥ 1` the upper tail `P(K ≥ n)` of `K ~ Poisson(r)` is strictly increasing in the
+mean `r`. -/
+theorem poissonMeasure_real_Ici_strictMono {n : ℕ} (hn : n ≠ 0) :
+    StrictMono fun r : ℝ≥0 => (poissonMeasure r).real (Set.Ici n) := by
+  obtain ⟨k, rfl⟩ := Nat.exists_eq_succ_of_ne_zero hn
+  intro r₁ r₂ h
+  simp only [poissonMeasure_real_Ici_succ]
+  have : poissonCDF r₂ k < poissonCDF r₁ k :=
+    poissonCDF_strictAntiOn k (mem_Ici.2 r₁.2) (mem_Ici.2 r₂.2) (NNReal.coe_lt_coe.2 h)
+  linarith
+
+/-- The upper tail `P(K ≥ n)` of `K ~ Poisson(r)` is monotone in the mean `r` (constant `1`
+at `n = 0`). -/
+theorem poissonMeasure_real_Ici_mono (n : ℕ) :
+    Monotone fun r : ℝ≥0 => (poissonMeasure r).real (Set.Ici n) := by
+  rcases eq_or_ne n 0 with rfl | hn
+  · intro r₁ r₂ _
+    simp
+  · exact (poissonMeasure_real_Ici_strictMono hn).monotone
 
 /-- For fixed `k`, `F_k(x) → 0` as the mean `x → ∞`. -/
 theorem tendsto_poissonCDF_atTop (k : ℕ) :
