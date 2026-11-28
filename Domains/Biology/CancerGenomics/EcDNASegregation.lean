@@ -44,6 +44,8 @@ solution of these equations on `t ≥ 0` with a finite population `N(t) = ∑ₖ
 ## Main results
 
 * `IsSolution.totalCount_eq`: `N(t) = N(0) e^t`.
+* `IsSolution.summable_mul`, `IsSolution.summable_sq_mul`: a finite first or second moment at
+  `t = 0` stays finite for all `t ≥ 0`.
 * `IsSolution.tsum_mul_eq`, `IsSolution.tsum_sq_mul_eq`: `∑ₖ k N_k(t) = e^t ∑ₖ k N_k(0)` and
   `∑ₖ k² N_k(t) = (∑ₖ k² N_k(0) + t ∑ₖ k N_k(0)) e^t`.
 * `IsSolution.hasDerivWithinAt_density`: the densities solve
@@ -56,9 +58,9 @@ solution of these equations on `t ≥ 0` with a finite population `N(t) = ∑ₖ
 * `IsSolution.moment_of_single`: from one cell with one copy, `M₁ ≡ 1` and `M₂(t) = 1 + t`.
 * `IsSolution.monotoneOn_density_zero`: the fraction `ρ₀` of ecDNA-free cells never decreases.
 
-The moment results assume that the moments they use are finite at every time `t ≥ 0`, as the
-definition of `M_l(t)` presupposes. The mean equations are the model: their derivation from the
-individual-based stochastic process is not formalized here.
+The moment results assume only that the moments they use are finite at `t = 0`. The mean
+equations are the model: their derivation from the individual-based stochastic process is not
+formalized here.
 
 ## References
 
@@ -166,6 +168,16 @@ theorem tsum_sq_mul_segregationProb (i : ℕ) :
   push_cast
   ring
 
+private lemma tsum_mul_segregationProb_mono {v w : ℕ → ℝ} (h : ∀ k, v k ≤ w k) (i : ℕ) :
+    ∑' k, v k * segregationProb i k ≤ ∑' k, w k * segregationProb i k :=
+  Summable.tsum_le_tsum (fun k => mul_le_mul_of_nonneg_right (h k) (segregationProb_nonneg i k))
+    (summable_mul_segregationProb v i) (summable_mul_segregationProb w i)
+
+private lemma tsum_mul_segregationProb_le {w : ℕ → ℝ} {K : ℝ} (hwK : ∀ k, w k ≤ K) (i : ℕ) :
+    ∑' k, w k * segregationProb i k ≤ K := by
+  refine (tsum_mul_segregationProb_mono (w := fun _ => K) hwK i).trans_eq ?_
+  rw [tsum_mul_left, tsum_segregationProb, mul_one]
+
 /-- Exchanging the order of summation in `∑ₖ w_k ∑ᵢ x_i P(i, k)` for nonnegative `x` and `w`,
 where `∑ₖ w_k P(i, k) = m_i`. -/
 private lemma tsum_mul_tsum_segregationProb {x w m : ℕ → ℝ} (hx : ∀ i, 0 ≤ x i)
@@ -213,19 +225,20 @@ structure IsSolution (N : ℕ → ℝ → ℝ) : Prop where
   hasDerivWithinAt : ∀ k t, 0 ≤ t →
     HasDerivWithinAt (N k) (-N k t + 2 * ∑' i, N i t * segregationProb i k) (Ici 0) t
 
-/-- The expected population `N(t) = ∑ₖ N_k(t)`. -/
+/-- The expected population `N(t) = ∑ₖ N_k(t)` (`0` when the series diverges). -/
 noncomputable def totalCount (N : ℕ → ℝ → ℝ) (t : ℝ) : ℝ := ∑' k, N k t
 
 /-- The density `ρ_k(t) = N_k(t) / N(t)` of cells with `k` ecDNA copies (`0` when `N(t) = 0`). -/
 noncomputable def density (N : ℕ → ℝ → ℝ) (k : ℕ) (t : ℝ) : ℝ := N k t / totalCount N t
 
-/-- The `l`-th moment `M_l(t) = ∑ₖ k^l ρ_k(t)` of the ecDNA copy number. -/
+/-- The `l`-th moment `M_l(t) = ∑ₖ k^l ρ_k(t)` of the ecDNA copy number (`0` when the series
+diverges). -/
 noncomputable def moment (N : ℕ → ℝ → ℝ) (l : ℕ) (t : ℝ) : ℝ :=
   ∑' k : ℕ, (k : ℝ) ^ l * density N k t
 
-/-- The variance `M₂(t) - M₁(t)²` of the ecDNA copy number: the variance of the copy-number
-distribution `ρ(t)`, which is a probability distribution for a solution with `N(0) ≠ 0`
-(`IsSolution.tsum_density`). -/
+/-- The variance `M₂(t) - M₁(t)²` of the ecDNA copy number, with each moment `0` when its series
+diverges: the variance of the copy-number distribution `ρ(t)`, which is a probability
+distribution for a solution with `N(0) ≠ 0` (`IsSolution.tsum_density`). -/
 noncomputable def copyNumberVariance (N : ℕ → ℝ → ℝ) (t : ℝ) : ℝ :=
   moment N 2 t - moment N 1 t ^ 2
 
@@ -267,6 +280,38 @@ private lemma eq_mul_exp_of_hasDerivAt {F : ℝ → ℝ} {c : ℝ}
         mul_one]
     _ = (F 0 + c * t) * exp t := by rw [h']
 
+/-- A function with nonpositive derivative on `(0, ∞)` that is continuous on `[0, ∞)` does not
+exceed its value at `0` there. -/
+private lemma le_of_hasDerivAt_nonpos {G G' : ℝ → ℝ} (hc : ∀ T, 0 ≤ T → ContinuousOn G (Icc 0 T))
+    (hd : ∀ t, 0 < t → HasDerivAt G (G' t) t) (hG' : ∀ t, 0 < t → G' t ≤ 0) {t : ℝ}
+    (ht : 0 ≤ t) : G t ≤ G 0 := by
+  rcases ht.eq_or_lt with h | ht
+  · rw [← h]
+  obtain ⟨c, hc', h⟩ := exists_hasDerivAt_eq_slope G G' ht (hc t ht.le) fun x hx => hd x hx.1
+  rw [eq_div_iff (by linarith : t - 0 ≠ 0)] at h
+  nlinarith [hG' c hc'.1]
+
+/-- Comparison for `F' ≤ F + c e^t` on `t ≥ 0`. -/
+private lemma le_mul_exp_of_hasDerivAt {F f' : ℝ → ℝ} {c : ℝ}
+    (hc : ∀ T, 0 ≤ T → ContinuousOn F (Icc 0 T)) (hd : ∀ t, 0 < t → HasDerivAt F (f' t) t)
+    (hle : ∀ t, 0 < t → f' t ≤ F t + c * exp t) {t : ℝ} (ht : 0 ≤ t) :
+    F t ≤ (F 0 + c * t) * exp t := by
+  have h := le_of_hasDerivAt_nonpos (G := fun s => F s * exp (-s) - c * s)
+    (G' := fun s => f' s * exp (-s) + F s * (exp (-s) * -1) - c * 1)
+    (fun T hT => ((hc T hT).mul (continuous_exp.comp continuous_neg).continuousOn).sub
+      (continuousOn_const.mul continuousOn_id))
+    (fun s hs => ((hd s hs).mul (hasDerivAt_neg s).exp).sub ((hasDerivAt_id s).const_mul c))
+    (fun s hs => by
+      have hmul : (f' s - F s) * exp (-s) ≤ c * exp s * exp (-s) :=
+        mul_le_mul_of_nonneg_right (by linarith [hle s hs]) (exp_pos _).le
+      rw [mul_assoc c, ← exp_add, add_neg_cancel, exp_zero, mul_one] at hmul
+      linarith) ht
+  simp only [neg_zero, exp_zero, mul_one, mul_zero, sub_zero] at h
+  have h' : F t * exp (-t) ≤ F 0 + c * t := by linarith
+  calc F t = F t * exp (-t) * exp t := by rw [mul_assoc, ← exp_add, neg_add_cancel, exp_zero,
+        mul_one]
+    _ ≤ (F 0 + c * t) * exp t := mul_le_mul_of_nonneg_right h' (exp_pos t).le
+
 namespace IsSolution
 
 variable {N : ℕ → ℝ → ℝ} (hN : IsSolution N)
@@ -298,7 +343,7 @@ private lemma le_exp_mul (k : ℕ) {s T : ℝ} (hs : 0 ≤ s) (hsT : s ≤ T) :
   calc N k s ≤ exp s * N k s := le_mul_of_one_le_left (hN.nonneg k s hs) (one_le_exp hs)
     _ ≤ exp T * N k T := hmono hs (hs.trans hsT) hsT
 
-private lemma summable_mul_segregationProb {t : ℝ} (ht : 0 ≤ t) (k : ℕ) :
+private lemma summable_mul_kernel {t : ℝ} (ht : 0 ≤ t) (k : ℕ) :
     Summable fun i => N i t * segregationProb i k :=
   Summable.of_nonneg_of_le (fun i => mul_nonneg (hN.nonneg i t ht) (segregationProb_nonneg i k))
     (fun i => mul_le_of_le_one_right (hN.nonneg i t ht) (segregationProb_le_one i k))
@@ -329,8 +374,8 @@ private lemma hasDerivAt_tsum_weighted {w m : ℕ → ℝ} (hw : ∀ k, 0 ≤ w 
       ∑' i, N i s * segregationProb i k ≤ exp T * ∑' i, N i T * segregationProb i k := by
     intro k s hs hsT
     rw [← tsum_mul_left]
-    refine Summable.tsum_le_tsum (fun i => ?_) (hN.summable_mul_segregationProb hs k)
-      ((hN.summable_mul_segregationProb hT k).mul_left _)
+    refine Summable.tsum_le_tsum (fun i => ?_) (hN.summable_mul_kernel hs k)
+      ((hN.summable_mul_kernel hT k).mul_left _)
     calc N i s * segregationProb i k ≤ (exp T * N i T) * segregationProb i k :=
           mul_le_mul_of_nonneg_right (hN.le_exp_mul i hs hsT) (segregationProb_nonneg i k)
       _ = exp T * (N i T * segregationProb i k) := by ring
@@ -389,11 +434,71 @@ theorem totalCount_eq {t : ℝ} (ht : 0 ≤ t) : totalCount N t = totalCount N 0
       ring) ht
   simpa using h
 
+private lemma summable_bounded {w : ℕ → ℝ} {K : ℝ} (hw : ∀ k, 0 ≤ w k) (hwK : ∀ k, w k ≤ K)
+    {t : ℝ} (ht : 0 ≤ t) : Summable fun k => w k * N k t :=
+  Summable.of_nonneg_of_le (fun k => mul_nonneg (hw k) (hN.nonneg k t ht))
+    (fun k => mul_le_mul_of_nonneg_right (hwK k) (hN.nonneg k t ht))
+    ((hN.summable t ht).mul_left K)
+
+/-- Comparison for a bounded weight `0 ≤ w ≤ K` with `∑ₖ w_k C(2i, k) 2^{-2i} ≤ w_i + a_i`, where
+`2 ∑ᵢ N_i(t) a_i ≤ c e^t`: then `∑ₖ w_k N_k(t) ≤ (∑ₖ w_k N_k(0) + c t) e^t`. -/
+private lemma tsum_bounded_le {w a : ℕ → ℝ} {K c : ℝ} (hw : ∀ k, 0 ≤ w k)
+    (hwK : ∀ k, w k ≤ K) (hm : ∀ i, ∑' k, w k * segregationProb i k ≤ w i + a i)
+    (ha : ∀ s, 0 < s → Summable fun i => N i s * a i)
+    (hc : ∀ s, 0 < s → 2 * ∑' i, N i s * a i ≤ c * exp s) {t : ℝ} (ht : 0 ≤ t) :
+    ∑' k, w k * N k t ≤ (∑' k, w k * N k 0 + c * t) * exp t := by
+  have hm0 : ∀ i, 0 ≤ ∑' k, w k * segregationProb i k := fun i =>
+    tsum_nonneg fun k => mul_nonneg (hw k) (segregationProb_nonneg i k)
+  have hmK : ∀ i, ∑' k, w k * segregationProb i k ≤ K := fun i => tsum_mul_segregationProb_le hwK i
+  have hM : ∀ s, 0 ≤ s → Summable fun i => N i s * ∑' k, w k * segregationProb i k :=
+    fun s hs => (hN.summable_bounded hm0 hmK hs).congr fun i => mul_comm _ _
+  refine le_mul_exp_of_hasDerivAt
+    (fun T hT => hN.continuousOn_tsum_weighted hw (fun s hs => hN.summable_bounded hw hwK hs) hT)
+    (fun s hs => hN.hasDerivAt_tsum_weighted hw (fun i => rfl)
+      (fun s hs => hN.summable_bounded hw hwK hs) hM hs) (fun s hs => ?_) ht
+  have hW := hN.summable_bounded hw hwK hs.le
+  have hle : ∑' i, N i s * ∑' k, w k * segregationProb i k ≤
+      ∑' k, w k * N k s + ∑' i, N i s * a i := by
+    rw [← hW.tsum_add (ha s hs)]
+    refine Summable.tsum_le_tsum (fun i => ?_) (hM s hs.le) (hW.add (ha s hs))
+    calc N i s * ∑' k, w k * segregationProb i k ≤ N i s * (w i + a i) :=
+          mul_le_mul_of_nonneg_left (hm i) (hN.nonneg i s hs.le)
+      _ = w i * N i s + N i s * a i := by ring
+  linarith [hc s hs]
+
+/-- **A finite first moment stays finite**: if `∑ₖ k N_k(0)` converges, so does `∑ₖ k N_k(t)` for
+every `t ≥ 0`. -/
+theorem summable_mul (h1 : Summable fun k : ℕ => (k : ℝ) * N k 0) {t : ℝ} (ht : 0 ≤ t) :
+    Summable fun k : ℕ => (k : ℝ) * N k t := by
+  refine summable_of_sum_range_le (c := (∑' k : ℕ, (k : ℝ) * N k 0) * exp t)
+    (fun k => mul_nonneg k.cast_nonneg (hN.nonneg k t ht)) fun n => ?_
+  have hw : ∀ k : ℕ, 0 ≤ min (k : ℝ) n := fun k => le_min k.cast_nonneg n.cast_nonneg
+  have hwK : ∀ k : ℕ, min (k : ℝ) n ≤ n := fun k => min_le_right _ _
+  have hF := hN.tsum_bounded_le (a := fun _ => 0) (c := 0) hw hwK
+    (fun i => by
+      rw [add_zero]
+      exact le_min ((tsum_mul_segregationProb_mono (fun k => min_le_left _ _) i).trans_eq
+        (tsum_mul_segregationProb i)) (tsum_mul_segregationProb_le hwK i))
+    (fun s _ => by simp) (fun s _ => by simp) ht
+  calc ∑ k ∈ Finset.range n, (k : ℝ) * N k t
+      = ∑ k ∈ Finset.range n, min (k : ℝ) n * N k t := Finset.sum_congr rfl fun k hk => by
+        rw [min_eq_left (by exact_mod_cast (Finset.mem_range.1 hk).le)]
+    _ ≤ ∑' k : ℕ, min (k : ℝ) n * N k t := (hN.summable_bounded hw hwK ht).sum_le_tsum _
+        fun k _ => mul_nonneg (hw k) (hN.nonneg k t ht)
+    _ ≤ (∑' k : ℕ, min (k : ℝ) n * N k 0 + 0 * t) * exp t := hF
+    _ ≤ (∑' k : ℕ, (k : ℝ) * N k 0) * exp t := by
+        rw [zero_mul, add_zero]
+        exact mul_le_mul_of_nonneg_right (Summable.tsum_le_tsum
+          (fun k => mul_le_mul_of_nonneg_right (min_le_left _ _) (hN.nonneg k 0 le_rfl))
+          (hN.summable_bounded hw hwK le_rfl) h1) (exp_pos t).le
+
 /-- **The expected number of ecDNA copies grows exponentially**: `∑ₖ k N_k(t) = e^t ∑ₖ k N_k(0)`,
 since a division replaces a cell with `i` copies by two daughters that carry `2i` copies between
-them, provided the first moment is finite at every time. -/
-theorem tsum_mul_eq (h1 : ∀ t, 0 ≤ t → Summable fun k : ℕ => (k : ℝ) * N k t) {t : ℝ}
-    (ht : 0 ≤ t) : ∑' k : ℕ, (k : ℝ) * N k t = (∑' k : ℕ, (k : ℝ) * N k 0) * exp t := by
+them, provided the first moment is finite at `t = 0`. -/
+theorem tsum_mul_eq (h1 : Summable fun k : ℕ => (k : ℝ) * N k 0) {t : ℝ} (ht : 0 ≤ t) :
+    ∑' k : ℕ, (k : ℝ) * N k t = (∑' k : ℕ, (k : ℝ) * N k 0) * exp t := by
+  replace h1 : ∀ t, 0 ≤ t → Summable fun k : ℕ => (k : ℝ) * N k t := fun t ht =>
+    hN.summable_mul h1 ht
   have h := eq_mul_exp_of_hasDerivAt (F := fun s => ∑' k : ℕ, (k : ℝ) * N k s) (c := 0)
     (fun T hT => hN.continuousOn_tsum_weighted (fun k => k.cast_nonneg) h1 hT)
     (fun s hs => by
@@ -404,19 +509,66 @@ theorem tsum_mul_eq (h1 : ∀ t, 0 ≤ t → Summable fun k : ℕ => (k : ℝ) *
       ring) ht
   simpa using h
 
-private lemma summable_mul_of_sq (h2 : ∀ t, 0 ≤ t → Summable fun k : ℕ => (k : ℝ) ^ 2 * N k t) :
-    ∀ t, 0 ≤ t → Summable fun k : ℕ => (k : ℝ) * N k t := fun t ht =>
+private lemma summable_mul_of_sq {t : ℝ} (ht : 0 ≤ t)
+    (h2 : Summable fun k : ℕ => (k : ℝ) ^ 2 * N k t) : Summable fun k : ℕ => (k : ℝ) * N k t :=
   Summable.of_nonneg_of_le (fun k => mul_nonneg k.cast_nonneg (hN.nonneg k t ht))
     (fun k => mul_le_mul_of_nonneg_right
-      (by exact_mod_cast Nat.le_self_pow two_ne_zero k) (hN.nonneg k t ht)) (h2 t ht)
+      (by exact_mod_cast Nat.le_self_pow two_ne_zero k) (hN.nonneg k t ht)) h2
+
+/-- **A finite second moment stays finite**: if `∑ₖ k² N_k(0)` converges, so does
+`∑ₖ k² N_k(t)` for every `t ≥ 0`. -/
+theorem summable_sq_mul (h2 : Summable fun k : ℕ => (k : ℝ) ^ 2 * N k 0) {t : ℝ} (ht : 0 ≤ t) :
+    Summable fun k : ℕ => (k : ℝ) ^ 2 * N k t := by
+  have h1 := hN.summable_mul_of_sq le_rfl h2
+  refine summable_of_sum_range_le
+    (c := (∑' k : ℕ, (k : ℝ) ^ 2 * N k 0 + (∑' k : ℕ, (k : ℝ) * N k 0) * t) * exp t)
+    (fun k => mul_nonneg (sq_nonneg _) (hN.nonneg k t ht)) fun n => ?_
+  have hw : ∀ k : ℕ, 0 ≤ min ((k : ℝ) ^ 2) ((n : ℝ) ^ 2) := fun k =>
+    le_min (sq_nonneg _) (sq_nonneg _)
+  have hwK : ∀ k : ℕ, min ((k : ℝ) ^ 2) ((n : ℝ) ^ 2) ≤ (n : ℝ) ^ 2 := fun k => min_le_right _ _
+  have hF := hN.tsum_bounded_le (a := fun i : ℕ => (i : ℝ) / 2) (c := ∑' k : ℕ, (k : ℝ) * N k 0)
+    hw hwK (fun i => ?_) (fun s hs => ((hN.summable_mul h1 hs.le).div_const 2).congr fun i => by
+      ring) (fun s hs => ?_) ht
+  · calc ∑ k ∈ Finset.range n, (k : ℝ) ^ 2 * N k t
+        = ∑ k ∈ Finset.range n, min ((k : ℝ) ^ 2) ((n : ℝ) ^ 2) * N k t :=
+          Finset.sum_congr rfl fun k hk => by
+            rw [min_eq_left (pow_le_pow_left₀ k.cast_nonneg
+              (by exact_mod_cast (Finset.mem_range.1 hk).le) 2)]
+      _ ≤ ∑' k : ℕ, min ((k : ℝ) ^ 2) ((n : ℝ) ^ 2) * N k t :=
+          (hN.summable_bounded hw hwK ht).sum_le_tsum _ fun k _ => mul_nonneg (hw k)
+            (hN.nonneg k t ht)
+      _ ≤ (∑' k : ℕ, min ((k : ℝ) ^ 2) ((n : ℝ) ^ 2) * N k 0 + (∑' k : ℕ, (k : ℝ) * N k 0) * t) *
+          exp t := hF
+      _ ≤ (∑' k : ℕ, (k : ℝ) ^ 2 * N k 0 + (∑' k : ℕ, (k : ℝ) * N k 0) * t) * exp t := by
+          refine mul_le_mul_of_nonneg_right (add_le_add_left (Summable.tsum_le_tsum
+            (fun k => mul_le_mul_of_nonneg_right (min_le_left _ _) (hN.nonneg k 0 le_rfl))
+            (hN.summable_bounded hw hwK le_rfl) h2) _) (exp_pos t).le
+  · have hle1 : ∑' k : ℕ, min ((k : ℝ) ^ 2) ((n : ℝ) ^ 2) * segregationProb i k ≤
+        (i : ℝ) ^ 2 + i / 2 :=
+      (tsum_mul_segregationProb_mono (fun k => min_le_left _ _) i).trans_eq
+        (tsum_sq_mul_segregationProb i)
+    have hle2 := tsum_mul_segregationProb_le hwK i
+    have hi : 0 ≤ (i : ℝ) / 2 := by positivity
+    rcases le_total ((i : ℝ) ^ 2) ((n : ℝ) ^ 2) with h | h
+    · rw [min_eq_left h]
+      linarith
+    · rw [min_eq_right h]
+      linarith
+  · have h2s : 2 * ∑' i : ℕ, N i s * ((i : ℝ) / 2) = ∑' i : ℕ, (i : ℝ) * N i s := by
+      rw [← tsum_mul_left]
+      exact tsum_congr fun i => by ring
+    rw [h2s, hN.tsum_mul_eq h1 hs.le]
 
 /-- **Second moment of the counts**: `∑ₖ k² N_k(t) = (∑ₖ k² N_k(0) + t ∑ₖ k N_k(0)) e^t`,
-provided the second moment is finite at every time. -/
-theorem tsum_sq_mul_eq (h2 : ∀ t, 0 ≤ t → Summable fun k : ℕ => (k : ℝ) ^ 2 * N k t) {t : ℝ}
-    (ht : 0 ≤ t) :
+provided the second moment is finite at `t = 0`. -/
+theorem tsum_sq_mul_eq (h2 : Summable fun k : ℕ => (k : ℝ) ^ 2 * N k 0) {t : ℝ} (ht : 0 ≤ t) :
     ∑' k : ℕ, (k : ℝ) ^ 2 * N k t =
       (∑' k : ℕ, (k : ℝ) ^ 2 * N k 0 + (∑' k : ℕ, (k : ℝ) * N k 0) * t) * exp t := by
-  have h1 := hN.summable_mul_of_sq h2
+  have h10 := hN.summable_mul_of_sq le_rfl h2
+  replace h2 : ∀ t, 0 ≤ t → Summable fun k : ℕ => (k : ℝ) ^ 2 * N k t := fun t ht =>
+    hN.summable_sq_mul h2 ht
+  have h1 : ∀ t, 0 ≤ t → Summable fun k : ℕ => (k : ℝ) * N k t := fun t ht =>
+    hN.summable_mul_of_sq ht (h2 t ht)
   have hsplit : ∀ s, 0 ≤ s → ∑' i, N i s * ((i : ℝ) ^ 2 + i / 2) =
       ∑' i : ℕ, (i : ℝ) ^ 2 * N i s + (∑' i : ℕ, (i : ℝ) * N i s) / 2 := fun s hs => by
     rw [← tsum_div_const, ← (h2 s hs).tsum_add ((h1 s hs).div_const 2)]
@@ -428,7 +580,7 @@ theorem tsum_sq_mul_eq (h2 : ∀ t, 0 ≤ t → Summable fun k : ℕ => (k : ℝ
         (fun k => sq_nonneg _) tsum_sq_mul_segregationProb h2
         (fun t ht => ((h2 t ht).add ((h1 t ht).div_const 2)).congr fun i => by ring) hs
       convert this using 1
-      rw [hsplit s hs.le, hN.tsum_mul_eq h1 hs.le]
+      rw [hsplit s hs.le, hN.tsum_mul_eq h10 hs.le]
       ring) ht
 
 /-- **The densities** `ρ_k = N_k / N` solve
@@ -484,48 +636,50 @@ theorem monotoneOn_density_zero : MonotoneOn (density N 0) (Ici 0) := by
   linarith
 
 /-- **The mean copy number is conserved**: `M₁(t) = M₁(0)`, provided the first moment is finite
-at every time. -/
-theorem moment_one_eq (h1 : ∀ t, 0 ≤ t → Summable fun k : ℕ => (k : ℝ) * N k t) {t : ℝ}
-    (ht : 0 ≤ t) : moment N 1 t = moment N 1 0 := by
+at `t = 0`. -/
+theorem moment_one_eq (h1 : Summable fun k : ℕ => (k : ℝ) * N k 0) {t : ℝ} (ht : 0 ≤ t) :
+    moment N 1 t = moment N 1 0 := by
   simp only [moment_eq_div, pow_one]
   rw [hN.tsum_mul_eq h1 ht, hN.totalCount_eq ht, mul_div_mul_right _ _ (exp_pos t).ne']
 
 /-- **The second moment grows linearly**: `M₂(t) = M₂(0) + M₁(0) t`, provided the second moment
-is finite at every time. -/
-theorem moment_two_eq (h2 : ∀ t, 0 ≤ t → Summable fun k : ℕ => (k : ℝ) ^ 2 * N k t) {t : ℝ}
-    (ht : 0 ≤ t) : moment N 2 t = moment N 2 0 + moment N 1 0 * t := by
+is finite at `t = 0`. -/
+theorem moment_two_eq (h2 : Summable fun k : ℕ => (k : ℝ) ^ 2 * N k 0) {t : ℝ} (ht : 0 ≤ t) :
+    moment N 2 t = moment N 2 0 + moment N 1 0 * t := by
   simp only [moment_eq_div, pow_one]
   rw [hN.tsum_sq_mul_eq h2 ht, hN.totalCount_eq ht, mul_div_mul_right _ _ (exp_pos t).ne',
     add_div, mul_div_right_comm]
 
-/-- **`dM₂/dt = M₁`** on `t ≥ 0`, provided the second moment is finite at every time. -/
-theorem hasDerivWithinAt_moment_two
-    (h2 : ∀ t, 0 ≤ t → Summable fun k : ℕ => (k : ℝ) ^ 2 * N k t) {t : ℝ} (ht : 0 ≤ t) :
+/-- **`dM₂/dt = M₁`** on `t ≥ 0`, provided the second moment is finite at `t = 0`. -/
+theorem hasDerivWithinAt_moment_two (h2 : Summable fun k : ℕ => (k : ℝ) ^ 2 * N k 0) {t : ℝ}
+    (ht : 0 ≤ t) :
     HasDerivWithinAt (moment N 2) (moment N 1 t) (Ici 0) t := by
   have hlin : HasDerivWithinAt (fun s => moment N 2 0 + moment N 1 0 * s) (moment N 1 0)
       (Ici 0) t := by
     simpa using (((hasDerivAt_id t).const_mul (moment N 1 0)).const_add
       (moment N 2 0)).hasDerivWithinAt
-  rw [hN.moment_one_eq (hN.summable_mul_of_sq h2) ht]
+  rw [hN.moment_one_eq (hN.summable_mul_of_sq le_rfl h2) ht]
   exact hlin.congr (fun s hs => hN.moment_two_eq h2 hs) (hN.moment_two_eq h2 ht)
 
 /-- **The copy-number variance grows linearly**: `Var(t) = Var(0) + M₁(0) t`, provided the second
-moment is finite at every time. -/
-theorem copyNumberVariance_eq (h2 : ∀ t, 0 ≤ t → Summable fun k : ℕ => (k : ℝ) ^ 2 * N k t) {t : ℝ}
+moment is finite at `t = 0`. -/
+theorem copyNumberVariance_eq (h2 : Summable fun k : ℕ => (k : ℝ) ^ 2 * N k 0) {t : ℝ}
     (ht : 0 ≤ t) : copyNumberVariance N t = copyNumberVariance N 0 + moment N 1 0 * t := by
   rw [copyNumberVariance, copyNumberVariance, hN.moment_two_eq h2 ht,
-    hN.moment_one_eq (hN.summable_mul_of_sq h2) ht]
+    hN.moment_one_eq (hN.summable_mul_of_sq le_rfl h2) ht]
   ring
 
-/-- **From one cell with one copy**, `M₁(t) = 1` and `M₂(t) = 1 + t`, provided the second moment
-is finite at every time. -/
-theorem moment_of_single (h2 : ∀ t, 0 ≤ t → Summable fun k : ℕ => (k : ℝ) ^ 2 * N k t)
-    (h0 : ∀ k, N k 0 = if k = 1 then 1 else 0) {t : ℝ} (ht : 0 ≤ t) :
+/-- **From one cell with one copy**, `M₁(t) = 1` and `M₂(t) = 1 + t`. -/
+theorem moment_of_single (h0 : ∀ k, N k 0 = if k = 1 then 1 else 0) {t : ℝ} (ht : 0 ≤ t) :
     moment N 1 t = 1 ∧ moment N 2 t = 1 + t := by
+  have h2 : Summable fun k : ℕ => (k : ℝ) ^ 2 * N k 0 :=
+    summable_of_ne_finset_zero (s := {1}) fun k hk => by
+      simp only [Finset.mem_singleton] at hk
+      simp [h0, hk]
   have hS : totalCount N 0 = 1 := by simp [totalCount, h0]
   have hM : ∀ l, moment N l 0 = 1 := fun l => by
     simp [moment, density, hS, h0]
-  exact ⟨by rw [hN.moment_one_eq (hN.summable_mul_of_sq h2) ht, hM],
+  exact ⟨by rw [hN.moment_one_eq (hN.summable_mul_of_sq le_rfl h2) ht, hM],
     by rw [hN.moment_two_eq h2 ht, hM, hM, one_mul]⟩
 
 end IsSolution

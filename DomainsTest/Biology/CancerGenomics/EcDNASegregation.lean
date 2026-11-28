@@ -14,8 +14,8 @@ import Mathlib.Analysis.Calculus.SmoothSeries
 import Mathlib.Analysis.SpecificLimits.Normed
 
 /-! Tests for the binomial segregation model of ecDNA: values of the segregation law and of its
-moments, the ecDNA-free population as a trivial solution, and, as a non-vacuity witness for the
-moment results, the solution started from one cell with one copy. That solution is the series
+moments, the ecDNA-free population as a trivial solution, and, as a non-vacuity witness with
+ecDNA, the solution started from one cell with one copy. That solution is the series
 `N_k(t) = e^{-t} ∑ₙ (2t)ⁿ/n! · Pₙ(k)` over generations, where `Pₙ` is the copy-number law of one
 lineage after `n` divisions: a cell of generation `n` is alive at time `t` with weight
 `e^{-t} tⁿ/n!`, and there are `2ⁿ` of them. -/
@@ -158,30 +158,6 @@ theorem lineage_le_one (n k : ℕ) : lineage n k ≤ 1 := by
   rw [tsum_lineage] at h
   simpa using h
 
-/-- A lineage keeps one copy on average. -/
-theorem tsum_lineage_mul_cast (n : ℕ) : ∑' k, lineage n k * k = 1 := by
-  induction n with
-  | zero => simp [lineage]
-  | succ n ih =>
-    rw [tsum_lineage_succ_mul (m := fun i => i) tsum_mul_segregationProb]
-    exact ih
-
-/-- The second moment of a lineage grows by `1/2` per division. -/
-theorem tsum_lineage_mul_sq (n : ℕ) : ∑' k, lineage n k * (k : ℝ) ^ 2 = 1 + n / 2 := by
-  induction n with
-  | zero => simp [lineage]
-  | succ n ih =>
-    rw [tsum_lineage_succ_mul (m := fun i : ℕ => (i : ℝ) ^ 2 + i / 2)
-      tsum_sq_mul_segregationProb]
-    have h : ∑' i, lineage n i * ((i : ℝ) ^ 2 + i / 2) =
-        ∑' i, lineage n i * (i : ℝ) ^ 2 + (∑' i, lineage n i * i) / 2 := by
-      rw [← tsum_div_const, ← (summable_lineage_mul n _).tsum_add
-        ((summable_lineage_mul n fun i : ℕ => (i : ℝ)).div_const 2)]
-      exact tsum_congr fun i => by ring
-    rw [h, ih, tsum_lineage_mul_cast]
-    push_cast
-    ring
-
 /-- Exchanging the order of a double sum of nonnegative terms. -/
 theorem summable_and_tsum_comm {F : ℕ → ℕ → ℝ} (hF : ∀ n k, 0 ≤ F n k)
     (hrow : ∀ n, Summable (F n)) (hs : Summable fun n => ∑' k, F n k) :
@@ -223,31 +199,9 @@ theorem singleCell_moment {w a : ℕ → ℝ} (hw : ∀ k, 0 ≤ w k)
   simp_rw [hk]
   exact ⟨hsum.mul_left _, by rw [tsum_mul_left, htsum, tsum_congr hrow]⟩
 
-theorem summable_weight_mul_sq {t : ℝ} (ht : 0 ≤ t) :
-    Summable fun n : ℕ => (2 * t) ^ n / n ! * (1 + (n : ℝ) / 2) := by
-  refine Summable.of_nonneg_of_le (fun n => mul_nonneg (weight_nonneg ht n) (by positivity))
-    (fun n => ?_) ((Real.summable_pow_div_factorial (2 * t)).add
-      (Real.summable_pow_div_factorial (2 * (2 * t))))
-  have h2n : (n : ℝ) / 2 ≤ 2 ^ n := by
-    have : (n : ℝ) ≤ 2 ^ n := by exact_mod_cast n.lt_two_pow_self.le
-    linarith
-  have hw := weight_nonneg ht n
-  calc (2 * t) ^ n / n ! * (1 + (n : ℝ) / 2)
-      = (2 * t) ^ n / n ! + (2 * t) ^ n / n ! * ((n : ℝ) / 2) := by ring
-    _ ≤ (2 * t) ^ n / n ! + (2 * t) ^ n / n ! * 2 ^ n := by gcongr
-    _ = (2 * t) ^ n / n ! + (2 * (2 * t)) ^ n / n ! := by
-      rw [show (2 * (2 * t)) ^ n = 2 ^ n * (2 * t) ^ n from mul_pow _ _ _]
-      ring
-
 theorem summable_singleCell {t : ℝ} (ht : 0 ≤ t) : Summable fun k => singleCell k t := by
   simpa using (singleCell_moment (w := fun _ => 1) (a := fun _ => 1) (fun _ => zero_le_one)
     tsum_lineage ht (by simpa using Real.summable_pow_div_factorial (2 * t))).1
-
-/-- The single-cell solution has a finite second moment at every time. -/
-theorem summable_sq_singleCell {t : ℝ} (ht : 0 ≤ t) :
-    Summable fun k : ℕ => (k : ℝ) ^ 2 * singleCell k t :=
-  (singleCell_moment (fun _ => sq_nonneg _) tsum_lineage_mul_sq ht
-    (summable_weight_mul_sq ht)).1
 
 /-- Termwise derivative of the series over generations. -/
 theorem hasDerivAt_series (k : ℕ) (t : ℝ) :
@@ -357,14 +311,22 @@ theorem isSolution_singleCell : IsSolution singleCell where
 
 /-- From one cell with one copy, `M₁ ≡ 1` and `M₂(t) = 1 + t`. -/
 example {t : ℝ} (ht : 0 ≤ t) : moment singleCell 1 t = 1 ∧ moment singleCell 2 t = 1 + t :=
-  isSolution_singleCell.moment_of_single (fun _ hs => summable_sq_singleCell hs)
-    singleCell_zero ht
+  isSolution_singleCell.moment_of_single singleCell_zero ht
+
+/-- The initial second moment is finite, so it stays finite. -/
+example {t : ℝ} (ht : 0 ≤ t) : Summable fun k : ℕ => (k : ℝ) ^ 2 * singleCell k t := by
+  refine isSolution_singleCell.summable_sq_mul (summable_of_ne_finset_zero (s := {1}) ?_) ht
+  intro k hk
+  simp only [Finset.mem_singleton] at hk
+  simp [singleCell_zero, hk]
 
 example {t : ℝ} (ht : 0 ≤ t) : copyNumberVariance singleCell t = t := by
-  have h0 := isSolution_singleCell.moment_of_single (fun _ hs => summable_sq_singleCell hs)
-    singleCell_zero le_rfl
-  rw [isSolution_singleCell.copyNumberVariance_eq (fun _ hs => summable_sq_singleCell hs) ht,
-    copyNumberVariance, h0.1, h0.2]
+  have h0 := isSolution_singleCell.moment_of_single singleCell_zero le_rfl
+  have h2 : Summable fun k : ℕ => (k : ℝ) ^ 2 * singleCell k 0 :=
+    summable_of_ne_finset_zero (s := {1}) fun k hk => by
+      simp only [Finset.mem_singleton] at hk
+      simp [singleCell_zero, hk]
+  rw [isSolution_singleCell.copyNumberVariance_eq h2 ht, copyNumberVariance, h0.1, h0.2]
   ring
 
 /-- The population is `N(t) = e^t`. -/
